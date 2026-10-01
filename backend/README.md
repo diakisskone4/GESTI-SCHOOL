@@ -145,3 +145,10 @@ coefficient, les rangs, la mention, et met à jour le tableau d'honneur.
    (actuellement en mode simulation/console).
 4. Ajouter Celery + Redis pour l'envoi asynchrone des notifications et la
    génération de rapports volumineux.
+
+
+postgresql://gesti_user:6lvaQyMWRXPjg5So60gmYVARy1QNFhnh@dpg-dav5fp17lnhs73aussm0-a/gesti_scolaire
+
+
+
+postgresql://gesti_user:6lvaQyMWRXPjg5So60gmYVARy1QNFhnh@dpg-dav5fp17lnhs73aussm0-a.frankfurt-postgres.render.com/gesti_scolaire
