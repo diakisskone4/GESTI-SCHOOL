@@ -1,0 +1,84 @@
+@import "tailwindcss";
+
+@theme {
+  /* Palette inspirée d'un dashboard SaaS moderne (esprit Kelaz) :
+     violet/indigo comme couleur d'accent, fond neutre très clair,
+     cartes blanches avec ombres douces et coins arrondis. */
+  --color-brand-50: #f2efff;
+  --color-brand-100: #e6e0ff;
+  --color-brand-200: #cabdff;
+  --color-brand-300: #a894ff;
+  --color-brand-400: #8a6bfb;
+  --color-brand-500: #7048f0;
+  --color-brand-600: #5f34dd;
+  --color-brand-700: #4d28b3;
+  --color-brand-800: #3d2190;
+  --color-brand-900: #2e1a6e;
+
+  --color-surface: #ffffff;
+  --color-canvas: #f6f5fb;
+  --color-canvas-dark: #0f1024;
+  --color-surface-dark: #171833;
+
+  --font-sans: "Plus Jakarta Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --shadow-card: 0 1px 2px rgba(16, 17, 46, 0.04), 0 8px 24px -6px rgba(16, 17, 46, 0.08);
+  --shadow-card-hover: 0 4px 10px rgba(16, 17, 46, 0.06), 0 16px 32px -8px rgba(16, 17, 46, 0.14);
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+  }
+  body {
+    @apply bg-canvas text-slate-800 antialiased;
+  }
+  ::selection {
+    @apply bg-brand-200 text-brand-900;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-surface rounded-2xl border border-slate-100 shadow-[var(--shadow-card)];
+  }
+  .card-hover {
+    @apply transition-shadow hover:shadow-[var(--shadow-card-hover)];
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors disabled:opacity-50 disabled:pointer-events-none bg-brand-600 text-white hover:bg-brand-700 shadow-sm shadow-brand-600/20;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors disabled:opacity-50 disabled:pointer-events-none bg-white text-slate-700 border border-slate-200 hover:bg-slate-50;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors disabled:opacity-50 disabled:pointer-events-none text-slate-600 hover:bg-slate-100;
+  }
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors disabled:opacity-50 disabled:pointer-events-none bg-rose-600 text-white hover:bg-rose-700;
+  }
+  .input {
+    @apply w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100 transition;
+  }
+  .label {
+    @apply mb-1.5 block text-sm font-medium text-slate-600;
+  }
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold;
+  }
+  .table-shell {
+    @apply w-full overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-[var(--shadow-card)];
+  }
+  .table-shell table {
+    @apply w-full text-left text-sm;
+  }
+  .table-shell thead {
+    @apply bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500;
+  }
+  .table-shell th, .table-shell td {
+    @apply px-4 py-3;
+  }
+  .table-shell tbody tr {
+    @apply border-t border-slate-100 hover:bg-brand-50/40 transition-colors;
+  }
+}
