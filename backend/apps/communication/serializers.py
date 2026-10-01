@@ -45,6 +45,8 @@ class AnnonceSerializer(serializers.ModelSerializer):
 
 
 class NotificationSerializer(serializers.ModelSerializer):
+    type_label = serializers.CharField(source="get_type_notification_display", read_only=True)
+
     class Meta:
         model = Notification
         fields = "__all__"

@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Bell, ChevronDown, LogOut, Menu, Search, Settings, User } from "lucide-react";
+import { ChevronDown, LogOut, Menu, Search, Settings, User } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth, ROLE_LABELS } from "../../context/AuthContext";
+import NotificationBell from "./NotificationBell";
 
 export default function Topbar({ onMenuClick }) {
   const { user, logout } = useAuth();
@@ -31,10 +32,7 @@ export default function Topbar({ onMenuClick }) {
       </div>
 
       <div className="flex items-center gap-2">
-        <button className="relative rounded-xl p-2.5 text-slate-500 hover:bg-slate-100">
-          <Bell size={19} />
-          <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-rose-500" />
-        </button>
+        <NotificationBell />
 
         <div className="relative">
           <button

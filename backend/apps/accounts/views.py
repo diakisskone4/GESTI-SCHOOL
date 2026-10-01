@@ -1,6 +1,7 @@
-from django.contrib.auth import get_user_model
+from django.contrib.auth import get_user_model, password_validation
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils import timezone
-from rest_framework import generics, status, viewsets
+from rest_framework import generics, serializers, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -114,19 +115,57 @@ class UserViewSet(viewsets.ModelViewSet):
     search_fields = ["email", "first_name", "last_name", "telephone"]
     ordering_fields = ["date_joined", "last_name"]
 
+    def _verifier_role(self, role):
+        """Seul un super administrateur peut attribuer le rôle « superadmin »."""
+        demandeur = self.request.user
+        if role == User.Role.SUPERADMIN and not (demandeur.role == User.Role.SUPERADMIN or demandeur.is_superuser):
+            raise serializers.ValidationError({"role": "Seul un super administrateur peut attribuer ce rôle."})
+
+    def _valider_mot_de_passe(self, password, user=None):
+        try:
+            password_validation.validate_password(password, user)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({"password": list(exc.messages)})
+
     def perform_create(self, serializer):
         import secrets
-        password = self.request.data.get("password") or secrets.token_urlsafe(10)
+        self._verifier_role(serializer.validated_data.get("role"))
+        password = self.request.data.get("password")
+        if password:
+            self._valider_mot_de_passe(password)
+        else:
+            password = secrets.token_urlsafe(10)
         user = serializer.save()
         user.set_password(password)
         user.doit_changer_mot_de_passe = True
         user.save()
+        if user.etablissement_courant:
+            user.etablissements.add(user.etablissement_courant)
+
+    def perform_update(self, serializer):
+        if "role" in serializer.validated_data:
+            self._verifier_role(serializer.validated_data["role"])
+        password = self.request.data.get("password")
+        if password:
+            self._valider_mot_de_passe(password, serializer.instance)
+        user = serializer.save()
+        if password:
+            user.set_password(password)
+            user.doit_changer_mot_de_passe = True
+            user.save()
+        if user.etablissement_courant:
+            user.etablissements.add(user.etablissement_courant)
 
 
 class LienParentEleveViewSet(viewsets.ModelViewSet):
     queryset = LienParentEleve.objects.select_related("parent", "eleve")
     serializer_class = LienParentEleveSerializer
-    filterset_fields = ["parent", "eleve"]
+    filterset_fields = ["parent", "eleve", "eleve__etablissement", "relation"]
+    search_fields = [
+        "parent__first_name", "parent__last_name", "parent__email",
+        "eleve__nom", "eleve__prenom", "eleve__matricule",
+    ]
+    ordering = ["eleve__nom", "eleve__prenom"]
 
     def get_permissions(self):
         if self.action == "mes_enfants":

@@ -58,7 +58,7 @@ class Notification(TimeStampedModel):
     TYPE_CHOICES = [
         ("resultat", "Résultat scolaire"), ("absence", "Absence"),
         ("convocation", "Convocation"), ("paiement", "Paiement"),
-        ("annonce", "Annonce"), ("autre", "Autre"),
+        ("annonce", "Annonce"), ("message", "Message"), ("autre", "Autre"),
     ]
     STATUT_CHOICES = [("en_attente", "En attente"), ("envoyee", "Envoyée"), ("echec", "Échec")]
 

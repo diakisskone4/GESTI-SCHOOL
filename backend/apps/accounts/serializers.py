@@ -81,6 +81,24 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
 
 class LienParentEleveSerializer(serializers.ModelSerializer):
+    parent_nom = serializers.CharField(source="parent.get_full_name", read_only=True)
+    parent_email = serializers.EmailField(source="parent.email", read_only=True)
+    parent_telephone = serializers.CharField(source="parent.telephone", read_only=True)
+    eleve_nom = serializers.SerializerMethodField()
+    eleve_matricule = serializers.CharField(source="eleve.matricule", read_only=True)
+    relation_label = serializers.CharField(source="get_relation_display", read_only=True)
+
     class Meta:
         model = LienParentEleve
-        fields = ["id", "parent", "eleve", "relation", "est_contact_principal"]
+        fields = [
+            "id", "parent", "eleve", "relation", "relation_label", "est_contact_principal",
+            "parent_nom", "parent_email", "parent_telephone", "eleve_nom", "eleve_matricule",
+        ]
+
+    def get_eleve_nom(self, obj):
+        return f"{obj.eleve.prenom} {obj.eleve.nom}"
+
+    def validate_parent(self, value):
+        if value.role != User.Role.PARENT:
+            raise serializers.ValidationError("Le compte sélectionné n'a pas le rôle « Parent ».")
+        return value

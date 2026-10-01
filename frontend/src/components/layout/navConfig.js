@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, School, Users, GraduationCap, BookOpenCheck,
   FileText, Wallet, Banknote, MessageSquare, BarChart3, CalendarClock,
-  ClipboardList, IdCard, Megaphone, Calendar, Layers,
+  ClipboardList, IdCard, Megaphone, Calendar, Layers, Link2, UserCog,
 } from "lucide-react";
 
 /** Menu de navigation par rôle. Chaque item : { label, to, icon, roles? } */
@@ -11,6 +11,7 @@ export const NAV_SECTIONS = [
     items: [
       { label: "Tableau de bord", to: "/", icon: LayoutDashboard },
       { label: "Établissements", to: "/etablissements", icon: School, roles: ["admin", "superadmin"] },
+      { label: "Utilisateurs", to: "/utilisateurs", icon: UserCog, roles: ["admin", "superadmin"] },
       { label: "Années & Périodes", to: "/annees-scolaires", icon: Calendar, roles: ["admin", "superadmin"] },
       { label: "Classes & Niveaux", to: "/classes", icon: Layers, roles: ["admin", "superadmin"] },
       { label: "Emploi du temps", to: "/emploi-du-temps", icon: CalendarClock, roles: ["admin", "superadmin"] },
@@ -20,6 +21,7 @@ export const NAV_SECTIONS = [
     title: "Scolarité",
     items: [
       { label: "Élèves", to: "/eleves", icon: Users, roles: ["admin", "superadmin"] },
+      { label: "Liens parents-élèves", to: "/liens-parents-eleves", icon: Link2, roles: ["admin", "superadmin"] },
       { label: "Enseignants", to: "/enseignants", icon: GraduationCap, roles: ["admin", "superadmin"] },
       { label: "Notes & bulletins", to: "/academique/bulletins", icon: BookOpenCheck, roles: ["admin", "superadmin", "enseignant"] },
       { label: "Absences", to: "/absences", icon: ClipboardList, roles: ["admin", "superadmin", "enseignant"] },

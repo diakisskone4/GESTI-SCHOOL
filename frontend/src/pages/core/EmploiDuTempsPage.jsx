@@ -9,7 +9,10 @@ import DataTable from "../../components/ui/DataTable";
 import { useAuth } from "../../context/AuthContext";
 import { useFetch } from "../../hooks/useFetch";
 import { useToast, extractErrorMessage } from "../../context/ToastContext";
-import { classesApi, emploisDuTempsApi, enseignantsApi, matieresApi } from "../../api/endpoints";
+import {
+  classesApi, emploisDuTempsApi, enseignantsApi, matieresApi, etablissementsApi, anneesScolairesApi
+} from "../../api/endpoints";
+import { API_BASE_URL } from "../../api/client";
 
 const DAYS = [
   { index: 0, label: "Lundi" },
@@ -40,6 +43,101 @@ function getSubjectColor(idOrName = "") {
   return SUBJECT_COLORS[index];
 }
 
+const escapeHtml = (value) =>
+  String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+function absoluteMediaUrl(url) {
+  if (!url) return "";
+  if (/^https?:\/\//i.test(url)) return url;
+  return new URL(url, new URL(API_BASE_URL).origin).href;
+}
+
+/** Construit le document HTML imprimable : entête de l'établissement + grille horaires × jours. */
+function buildPrintDocument({ etablissement, anneeLibelle, title, creneaux, showClasse }) {
+  const hhmm = (t) => t?.substring(0, 5) || "";
+  const slots = Array.from(new Set(creneaux.map((cr) => `${hhmm(cr.heure_debut)}|${hhmm(cr.heure_fin)}`))).sort();
+  const days = DAYS.filter((d) => d.index < 5 || creneaux.some((cr) => cr.jour === d.index));
+
+  const cell = (dayIndex, slot) =>
+    creneaux
+      .filter((cr) => cr.jour === dayIndex && `${hhmm(cr.heure_debut)}|${hhmm(cr.heure_fin)}` === slot)
+      .map(
+        (cr) => `<div class="cours">
+          <div class="matiere">${escapeHtml(cr.matiere_nom)}</div>
+          ${cr.enseignant_nom ? `<div>${escapeHtml(cr.enseignant_nom)}</div>` : ""}
+          ${cr.salle ? `<div>Salle ${escapeHtml(cr.salle)}</div>` : ""}
+          ${showClasse && cr.classe_nom ? `<div>${escapeHtml(cr.classe_nom)}</div>` : ""}
+        </div>`
+      )
+      .join("");
+
+  const rows = slots.length
+    ? slots
+        .map((slot) => {
+          const [debut, fin] = slot.split("|");
+          return `<tr><th class="horaire">${debut}<br/>${fin}</th>${days.map((d) => `<td>${cell(d.index, slot)}</td>`).join("")}</tr>`;
+        })
+        .join("")
+    : `<tr><td colspan="${days.length + 1}" class="vide">Aucun cours planifié</td></tr>`;
+
+  const e = etablissement || {};
+  const logo = absoluteMediaUrl(e.logo);
+  const infos = [e.adresse, e.ville, e.pays].filter(Boolean).join(", ");
+  const contacts = [e.telephone && `Tél : ${e.telephone}`, e.email].filter(Boolean).join(" — ");
+
+  return `<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"/>
+<title>Emploi du temps — ${escapeHtml(title)}</title>
+<style>
+  @page { size: A4 landscape; margin: 12mm; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; margin: 0; font-size: 12px; }
+  .entete { display: flex; align-items: center; gap: 16px; border-bottom: 2px solid #111; padding-bottom: 10px; }
+  .entete img { height: 70px; width: auto; }
+  .entete .centre { flex: 1; text-align: center; }
+  .entete .academie { font-size: 11px; text-transform: uppercase; }
+  .entete .nom { font-size: 20px; font-weight: bold; text-transform: uppercase; margin: 2px 0; }
+  .entete .devise { font-style: italic; font-size: 11px; }
+  .entete .infos { font-size: 11px; color: #333; }
+  h1 { text-align: center; font-size: 18px; margin: 14px 0 2px; text-transform: uppercase; }
+  .sous-titre { text-align: center; margin-bottom: 12px; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  th, td { border: 1px solid #333; padding: 6px; vertical-align: top; }
+  thead th { background: #eee; text-transform: uppercase; font-size: 11px; }
+  th.horaire { width: 80px; background: #f5f5f5; text-align: center; vertical-align: middle; }
+  .cours + .cours { border-top: 1px dashed #999; margin-top: 4px; padding-top: 4px; }
+  .matiere { font-weight: bold; text-transform: uppercase; }
+  .vide { text-align: center; padding: 24px; color: #666; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+</style></head>
+<body>
+  <div class="entete">
+    ${logo ? `<img src="${escapeHtml(logo)}" alt="Logo"/>` : ""}
+    <div class="centre">
+      ${e.academie ? `<div class="academie">${escapeHtml(e.academie)}</div>` : ""}
+      ${e.cap ? `<div class="academie">${escapeHtml(e.cap)}</div>` : ""}
+      <div class="nom">${escapeHtml(e.nom || "")}</div>
+      ${e.devise ? `<div class="devise">${escapeHtml(e.devise)}</div>` : ""}
+      ${infos ? `<div class="infos">${escapeHtml(infos)}</div>` : ""}
+      ${contacts ? `<div class="infos">${escapeHtml(contacts)}</div>` : ""}
+    </div>
+  </div>
+  <h1>Emploi du temps — ${escapeHtml(title)}</h1>
+  <div class="sous-titre">Année scolaire ${escapeHtml(anneeLibelle || "en cours")}</div>
+  <table>
+    <thead><tr><th class="horaire">Horaire</th>${days.map((d) => `<th>${d.label}</th>`).join("")}</tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <script>
+    window.onload = function () {
+      window.focus();
+      window.print();
+    };
+    window.onafterprint = function () { window.close(); };
+  </script>
+</body></html>`;
+}
+
 const EMPTY_CRENEAU = {
   classe: "",
   matiere: "",
@@ -63,6 +161,13 @@ export default function EmploiDuTempsPage() {
 
   const { data: enseignantsData } = useFetch(() => enseignantsApi.list({ etablissement: etablissementId }), [etablissementId]);
   const enseignants = enseignantsData?.results || [];
+
+  const { data: etablissement } = useFetch(
+    () => (etablissementId ? etablissementsApi.get(etablissementId) : Promise.resolve(null)),
+    [etablissementId]
+  );
+  const { data: anneesData } = useFetch(() => anneesScolairesApi.list({ etablissement: etablissementId }), [etablissementId]);
+  const anneeCourante = (anneesData?.results || []).find((a) => a.est_courante);
 
   // Modes de filtrage : 'classe' | 'enseignant' | 'salle'
   const [filterMode, setFilterMode] = useState("classe");
@@ -182,8 +287,23 @@ export default function EmploiDuTempsPage() {
     }
   };
 
+  // Impression : document dédié contenant uniquement l'entête de l'établissement et le tableau
   const handlePrint = () => {
-    window.print();
+    const html = buildPrintDocument({
+      etablissement,
+      anneeLibelle: anneeCourante?.libelle,
+      title: currentTitle,
+      creneaux,
+      showClasse: filterMode !== "classe",
+    });
+    const win = window.open("", "_blank");
+    if (!win) {
+      notify("Autorisez les fenêtres pop-up pour imprimer l'emploi du temps.", "error");
+      return;
+    }
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
   };
 
   // Groupement des créneaux par jour pour la grille
@@ -347,12 +467,6 @@ export default function EmploiDuTempsPage() {
             <strong>{creneaux.length}</strong> créneau(x) planifié(s)
           </div>
         </div>
-      </div>
-
-      {/* Titre d'impression (visible à l'impression uniquement) */}
-      <div className="hidden text-center print:block print:pb-4">
-        <h1 className="text-2xl font-bold text-slate-900">{currentTitle}</h1>
-        <p className="text-sm text-slate-600">Emploi du temps officiel — Année scolaire en cours</p>
       </div>
 
       {/* --- VUE 1 : GRILLE HEBDOMADAIRE INTERACTIVE --- */}

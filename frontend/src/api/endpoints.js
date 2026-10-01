@@ -19,6 +19,7 @@ export const authApi = {
   logout: (refresh) => api.post("/auth/logout/", { refresh }),
 };
 export const usersApi = resource("/utilisateurs");
+export const liensParentEleveApi = resource("/liens-parent-eleve");
 
 // --- Core -------------------------------------------------------------
 export const etablissementsApi = resource("/etablissements");
@@ -122,7 +123,12 @@ export const messagesApi = {
   nonLus: () => api.get("/messages/non_lus/").then((r) => r.data),
 };
 export const annoncesApi = resource("/annonces");
-export const notificationsApi = resource("/notifications");
+export const notificationsApi = {
+  ...resource("/notifications"),
+  marquerLu: (id) => api.post(`/notifications/${id}/marquer_lu/`).then((r) => r.data),
+  toutMarquerLu: () => api.post("/notifications/tout_marquer_lu/").then((r) => r.data),
+  nonLues: () => api.get("/notifications/non_lues/").then((r) => r.data),
+};
 
 // --- Reporting --------------------------------------------------------
 export const statistiquesApi = {

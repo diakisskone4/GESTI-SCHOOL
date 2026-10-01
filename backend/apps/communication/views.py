@@ -113,3 +113,12 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
         notif.lu = True
         notif.save(update_fields=["lu"])
         return Response(self.get_serializer(notif).data)
+
+    @action(detail=False, methods=["post"])
+    def tout_marquer_lu(self, request):
+        nb = self.get_queryset().filter(lu=False).update(lu=True)
+        return Response({"marquees": nb})
+
+    @action(detail=False, methods=["get"])
+    def non_lues(self, request):
+        return Response({"non_lues": self.get_queryset().filter(lu=False).count()})

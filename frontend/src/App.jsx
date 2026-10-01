@@ -16,6 +16,7 @@ import ElevesPage from "./pages/students/ElevesPage";
 import EleveDetailPage from "./pages/students/EleveDetailPage";
 import AbsencesPage from "./pages/students/AbsencesPage";
 import CartesScolairesPage from "./pages/students/CartesScolairesPage";
+import LiensParentsElevesPage from "./pages/students/LiensParentsElevesPage";
 import EnseignantsPage from "./pages/staff/EnseignantsPage";
 import BulletinsPage from "./pages/academics/BulletinsPage";
 import DocumentsPage from "./pages/documents/DocumentsPage";
@@ -25,6 +26,7 @@ import MessagesPage from "./pages/communication/MessagesPage";
 import AnnoncesPage from "./pages/communication/AnnoncesPage";
 import StatistiquesPage from "./pages/reporting/StatistiquesPage";
 import ProfilePage from "./pages/profile/ProfilePage";
+import UtilisateursPage from "./pages/accounts/UtilisateursPage";
 
 const ADMIN_ROLES = ["admin", "superadmin"];
 const FINANCE_ROLES = ["admin", "superadmin", "comptable"];
@@ -49,12 +51,14 @@ export default function App() {
 
                 <Route element={<ProtectedRoute roles={ADMIN_ROLES} />}>
                   <Route path="/etablissements" element={<EtablissementsPage />} />
+                  <Route path="/utilisateurs" element={<UtilisateursPage />} />
                   <Route path="/classes" element={<ClassesPage />} />
                   <Route path="/annees-scolaires" element={<AnneesScolairesPage />} />
                   <Route path="/periodes" element={<PeriodesPage />} />
                   <Route path="/emploi-du-temps" element={<EmploiDuTempsPage />} />
                   <Route path="/eleves" element={<ElevesPage />} />
                   <Route path="/eleves/:id" element={<EleveDetailPage />} />
+                  <Route path="/liens-parents-eleves" element={<LiensParentsElevesPage />} />
                   <Route path="/enseignants" element={<EnseignantsPage />} />
                   <Route path="/cartes-scolaires" element={<CartesScolairesPage />} />
                   <Route path="/documents" element={<DocumentsPage />} />
