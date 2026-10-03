@@ -35,6 +35,8 @@ const DAYS = [
 
 const fmt = (n) => `${Number(n || 0).toLocaleString("fr-FR")} FCFA`;
 
+const STATUT_LABELS = { payee: "Payée", partielle: "Partielle", impayee: "Impayée", annulee: "Annulée" };
+
 const STATUT_STYLES = {
   payee: "bg-emerald-50 text-emerald-600",
   partielle: "bg-amber-50 text-amber-600",
@@ -448,7 +450,15 @@ export default function StudentParentDashboard() {
                           <p className="text-xs text-slate-400">Montant dû : {fmt(f.montant_net)} · Payé : {fmt(f.montant_paye)} · Solde : {fmt(f.solde)}</p>
                         </div>
                       </div>
-                      <span className={`badge ${STATUT_STYLES[f.statut]}`}>{f.statut}</span>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => handleView(facturesApi.pdfPath(f.id), `Facture — ${f.libelle || "Frais scolaires"}`)}
+                          className="flex items-center gap-1.5 text-xs font-semibold text-brand-600 hover:underline"
+                        >
+                          <FileText size={13} /> Voir la facture
+                        </button>
+                        <span className={`badge ${STATUT_STYLES[f.statut]}`}>{STATUT_LABELS[f.statut] || f.statut}</span>
+                      </div>
                     </div>
                     {(f.paiements || []).length > 0 && (
                       <div className="mt-3 space-y-2">

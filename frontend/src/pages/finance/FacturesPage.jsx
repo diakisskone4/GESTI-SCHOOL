@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CreditCard, Download, Plus, Wallet, X } from "lucide-react";
+import { CreditCard, Download, FileText, Plus, Receipt, Wallet, X } from "lucide-react";
 import PageHeader from "../../components/ui/PageHeader";
 import DataTable from "../../components/ui/DataTable";
 import Modal from "../../components/ui/Modal";
@@ -11,6 +11,8 @@ import { facturesApi, paiementsApi, typesFraisApi, elevesApi, inscriptionsApi, d
 import { downloadAuthFile } from "../../utils/download";
 
 const fmt = (n) => `${Number(n || 0).toLocaleString("fr-FR")} FCFA`;
+
+const STATUT_LABELS = { payee: "Payée", partielle: "Partielle", impayee: "Impayée", annulee: "Annulée" };
 
 const STATUT_STYLES = {
   payee: "bg-emerald-50 text-emerald-600",
@@ -92,7 +94,7 @@ export default function FacturesPage() {
         facture: payModal.id, montant: payForm.montant, mode_paiement: payForm.mode_paiement,
       });
       notify("Paiement enregistré.", "success");
-      await downloadAuthFile(paiementsApi.recuPath(paiement.id), `recu_${paiement.id}.pdf`);
+      await downloadAuthFile(paiementsApi.recuPath(paiement.id), `recu_${paiement.numero_recu || paiement.id}.pdf`);
       setPayModal(null);
       reload();
     } catch (err) {
@@ -131,18 +133,41 @@ export default function FacturesPage() {
           { key: "solde", header: "Solde", render: (r) => fmt(r.solde) },
           {
             key: "statut", header: "Statut",
-            render: (r) => <span className={`badge ${STATUT_STYLES[r.statut]}`}>{r.statut}</span>,
+            render: (r) => <span className={`badge ${STATUT_STYLES[r.statut]}`}>{STATUT_LABELS[r.statut] || r.statut}</span>,
           },
           {
             key: "action", header: "",
-            render: (r) => r.statut !== "payee" && (
-              <button
-                onClick={() => { setPayModal(r); setPayForm({ montant: r.solde, mode_paiement: "especes" }); }}
-                className="text-sm font-semibold text-brand-600 hover:underline"
-              >
-                Encaisser
-              </button>
-            ),
+            render: (r) => {
+              const dernierRecu = (r.paiements || []).filter((p) => !p.annule).at(-1);
+              return (
+                <div className="flex items-center justify-end gap-3">
+                  <button
+                    onClick={() => downloadAuthFile(facturesApi.pdfPath(r.id), `facture_${r.eleve_nom || r.id}.pdf`)}
+                    className="flex items-center gap-1 text-sm font-semibold text-slate-600 hover:text-brand-600"
+                    title="Télécharger la facture (PDF A4)"
+                  >
+                    <FileText size={14} /> Facture
+                  </button>
+                  {dernierRecu && (
+                    <button
+                      onClick={() => downloadAuthFile(paiementsApi.recuPath(dernierRecu.id), `recu_${dernierRecu.numero_recu || dernierRecu.id}.pdf`)}
+                      className="flex items-center gap-1 text-sm font-semibold text-slate-600 hover:text-brand-600"
+                      title="Télécharger le dernier reçu de paiement (PDF A5)"
+                    >
+                      <Receipt size={14} /> Reçu
+                    </button>
+                  )}
+                  {r.statut !== "payee" && r.statut !== "annulee" && (
+                    <button
+                      onClick={() => { setPayModal(r); setPayForm({ montant: r.solde, mode_paiement: "especes" }); }}
+                      className="text-sm font-semibold text-brand-600 hover:underline"
+                    >
+                      Encaisser
+                    </button>
+                  )}
+                </div>
+              );
+            },
           },
         ]}
       />

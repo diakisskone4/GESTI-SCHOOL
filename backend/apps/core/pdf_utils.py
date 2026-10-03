@@ -1447,46 +1447,6 @@ def generer_document_administratif_pdf(titre, etablissement, contenu_lignes, des
     return buffer
 
 
-def generer_recu_paiement_pdf(recu, etablissement):
-    """Génère un reçu de paiement imprimable (A5)."""
-    buffer = io.BytesIO()
-    c = canvas.Canvas(buffer, pagesize=A5)
-    largeur, hauteur = A5
-    marge = 10 * mm
-    y = hauteur - marge
-
-    c.setFont("Helvetica-Bold", 12)
-    c.drawCentredString(largeur / 2, y, etablissement.nom)
-    y -= 8 * mm
-    c.setFont("Helvetica-Bold", 13)
-    c.drawCentredString(largeur / 2, y, "REÇU DE PAIEMENT")
-    y -= 10 * mm
-
-    c.setFont("Helvetica", 9)
-    c.drawString(marge, y, f"N° Reçu: {recu.numero_recu}")
-    c.drawRightString(largeur - marge, y, f"Date: {recu.date_paiement:%d/%m/%Y}")
-    y -= 7 * mm
-    c.drawString(marge, y, f"Élève: {recu.eleve.prenom} {recu.eleve.nom}")
-    y -= 6 * mm
-    c.drawString(marge, y, f"Matricule: {recu.eleve.matricule}")
-    y -= 10 * mm
-    c.setFont("Helvetica-Bold", 10)
-    c.drawString(marge, y, f"Motif: {recu.libelle}")
-    y -= 8 * mm
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(marge, y, f"Montant payé: {recu.montant:,.0f} FCFA")
-    y -= 6 * mm
-    c.setFont("Helvetica", 9)
-    c.drawString(marge, y, f"Mode de paiement: {recu.get_mode_paiement_display()}")
-    y -= 15 * mm
-    c.drawRightString(largeur - marge, y, "Signature du caissier")
-
-    c.showPage()
-    c.save()
-    buffer.seek(0)
-    return buffer
-
-
 def generer_bulletin_paie_pdf(bulletin, etablissement):
     """Génère le bulletin de paie PDF (A4) d'un employé pour un mois donné."""
     buffer = io.BytesIO()

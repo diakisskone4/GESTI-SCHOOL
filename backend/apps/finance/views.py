@@ -6,9 +6,9 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.core.pdf_utils import generer_recu_paiement_pdf
 from apps.core.permissions import IsAdminOuComptable
 from apps.finance.models import BaremeFrais, Bourse, FactureFrais, Paiement, TypeFrais
+from apps.finance.pdf import generer_facture_pdf, generer_recu_pdf, numero_facture
 from apps.finance.serializers import (
     BaremeFraisSerializer,
     BourseSerializer,
@@ -68,6 +68,14 @@ class FactureFraisViewSet(viewsets.ModelViewSet):
             return [IsAdminOuComptable()]
         return [IsAuthenticated()]
 
+    @action(detail=True, methods=["get"])
+    def pdf(self, request, pk=None):
+        """Facture imprimable (PDF A4) avec l'en-tête de l'établissement et l'historique des paiements."""
+        facture = self.get_object()
+        buffer = generer_facture_pdf(facture, facture.inscription.eleve.etablissement)
+        return FileResponse(buffer, as_attachment=False, filename=f"{numero_facture(facture)}.pdf",
+                            content_type="application/pdf")
+
 
 class PaiementViewSet(viewsets.ModelViewSet):
     serializer_class = PaiementSerializer
@@ -87,10 +95,10 @@ class PaiementViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=["get"])
     def recu(self, request, pk=None):
-        """Génère et renvoie le reçu de paiement imprimable (PDF A5)."""
+        """Génère et renvoie le reçu de paiement imprimable (PDF A5) aux couleurs de l'établissement."""
         paiement = self.get_object()
         etablissement = paiement.facture.inscription.eleve.etablissement
-        buffer = generer_recu_paiement_pdf(paiement, etablissement)
+        buffer = generer_recu_pdf(paiement, etablissement)
         paiement.recu_pdf.save(f"recu_{paiement.numero_recu}.pdf", ContentFile(buffer.getvalue()), save=True)
         buffer.seek(0)
         return FileResponse(buffer, as_attachment=False, filename=f"recu_{paiement.numero_recu}.pdf", content_type="application/pdf")

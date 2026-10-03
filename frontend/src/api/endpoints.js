@@ -101,7 +101,10 @@ export const documentsGeneresApi = {
 export const typesFraisApi = resource("/types-frais");
 export const baremesFraisApi = resource("/baremes-frais");
 export const boursesApi = resource("/bourses");
-export const facturesApi = resource("/factures");
+export const facturesApi = {
+  ...resource("/factures"),
+  pdfPath: (id) => `/factures/${id}/pdf/`,
+};
 export const paiementsApi = {
   ...resource("/paiements"),
   recuPath: (id) => `/paiements/${id}/recu/`,
