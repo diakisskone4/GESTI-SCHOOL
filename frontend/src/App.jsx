@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import { ToastProvider } from "./context/ToastContext";
 import ProtectedRoute from "./routes/ProtectedRoute";
+import InstallPrompt from "./components/InstallPrompt";
 import DashboardLayout from "./components/layout/DashboardLayout";
 
 import Login from "./pages/auth/Login";
@@ -31,6 +32,7 @@ import UtilisateursPage from "./pages/accounts/UtilisateursPage";
 const ADMIN_ROLES = ["admin", "superadmin"];
 const FINANCE_ROLES = ["admin", "superadmin", "comptable"];
 const ACADEMIC_ROLES = ["admin", "superadmin", "enseignant"];
+const VIE_SCOLAIRE_ROLES = [...ACADEMIC_ROLES, "surveillant"];
 
 export default function App() {
   return (
@@ -67,6 +69,9 @@ export default function App() {
 
                 <Route element={<ProtectedRoute roles={ACADEMIC_ROLES} />}>
                   <Route path="/academique/bulletins" element={<BulletinsPage />} />
+                </Route>
+
+                <Route element={<ProtectedRoute roles={VIE_SCOLAIRE_ROLES} />}>
                   <Route path="/absences" element={<AbsencesPage />} />
                 </Route>
 
@@ -79,6 +84,7 @@ export default function App() {
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          <InstallPrompt />
         </ToastProvider>
       </AuthProvider>
     </BrowserRouter>

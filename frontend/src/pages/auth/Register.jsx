@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, GraduationCap, Loader2, Lock, Mail, Phone, UserRound } from "lucide-react";
-import { authApi, etablissementsApi } from "../../api/endpoints";
+import { ArrowLeft, CalendarDays, GraduationCap, Loader2, Lock, Mail, Phone, School, UserRound } from "lucide-react";
+import { authApi } from "../../api/endpoints";
 import { useFetch } from "../../hooks/useFetch";
 import { extractErrorMessage } from "../../context/ToastContext";
 import authBg from "../../assets/auth-bg.jpg";
@@ -26,15 +26,23 @@ export default function Register() {
     first_name: "", last_name: "", email: "", telephone: "", password: "", password_confirm: "",
     role: PUBLIC_ROLES.some((item) => item.value === requestedRole) ? requestedRole : "eleve",
     etablissement_courant: "",
+    classe: "", sexe: "M", date_naissance: "", matricule: "",
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const estRoleStaff = STAFF_ROLES.some((role) => role.value === form.role);
-  const { data: etablissementsData } = useFetch(
-    () => (estRoleStaff ? etablissementsApi.list() : Promise.resolve({ results: [] })),
-    [estRoleStaff],
+  const estEleve = form.role === "eleve";
+  const besoinEtablissement = estRoleStaff || estEleve;
+
+  // Données publiques : établissements actifs, puis classes de l'année en cours de l'établissement choisi
+  const { data: options } = useFetch(
+    () => (besoinEtablissement
+      ? authApi.registerOptions(estEleve && form.etablissement_courant ? { etablissement: form.etablissement_courant } : {})
+      : Promise.resolve(null)),
+    [besoinEtablissement, estEleve, form.etablissement_courant],
   );
-  const etablissements = etablissementsData?.results || [];
+  const etablissements = options?.etablissements || [];
+  const classes = options?.classes || [];
 
   useEffect(() => {
     if (PUBLIC_ROLES.some((item) => item.value === requestedRole)) {
@@ -43,13 +51,17 @@ export default function Register() {
   }, [requestedRole]);
 
   const update = (event) => setForm({ ...form, [event.target.name]: event.target.value });
+  const updateEtablissement = (event) => setForm({ ...form, etablissement_courant: event.target.value, classe: "" });
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError("");
     setLoading(true);
     try {
-      await authApi.register({ ...form, etablissement_courant: form.etablissement_courant || null });
+      const { classe, sexe, date_naissance, matricule, ...compte } = form;
+      const payload = { ...compte, etablissement_courant: form.etablissement_courant || null };
+      if (estEleve) Object.assign(payload, { classe, sexe, date_naissance, matricule: matricule.trim() });
+      await authApi.register(payload);
       navigate("/connexion", { replace: true, state: { registered: true } });
     } catch (err) {
       setError(extractErrorMessage(err) || "Impossible de créer le compte.");
@@ -86,17 +98,68 @@ export default function Register() {
             </optgroup>
           </select>
 
-          {estRoleStaff && (
+          {besoinEtablissement && (
             <>
               <label className="label" htmlFor="etablissement_courant">Établissement</label>
-              <select
-                id="etablissement_courant" name="etablissement_courant" required
-                value={form.etablissement_courant} onChange={update} className="input mb-4"
-              >
-                <option value="">Sélectionner...</option>
-                {etablissements.map((etab) => <option key={etab.id} value={etab.id}>{etab.nom}</option>)}
-              </select>
+              <div className="relative mb-4">
+                <School size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <select
+                  id="etablissement_courant" name="etablissement_courant" required
+                  value={form.etablissement_courant} onChange={updateEtablissement} className="input pl-10"
+                >
+                  <option value="">Sélectionner...</option>
+                  {etablissements.map((etab) => (
+                    <option key={etab.id} value={etab.id}>{etab.nom}{etab.ville ? ` — ${etab.ville}` : ""}</option>
+                  ))}
+                </select>
+              </div>
             </>
+          )}
+
+          {estEleve && (
+            <div className="mb-4 space-y-4 rounded-xl border border-brand-100 bg-brand-50/40 p-4">
+              <p className="text-xs font-bold uppercase tracking-wider text-brand-600">Votre scolarité</p>
+              <div>
+                <label className="label" htmlFor="classe">Classe</label>
+                <select
+                  id="classe" name="classe" required disabled={!form.etablissement_courant}
+                  value={form.classe} onChange={update} className="input"
+                >
+                  <option value="">{form.etablissement_courant ? "Sélectionner votre classe..." : "Choisissez d'abord l'établissement"}</option>
+                  {classes.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nom}{c.niveau && c.niveau !== c.nom ? ` — ${c.niveau}` : ""}{c.serie ? ` (${c.serie})` : ""}
+                    </option>
+                  ))}
+                </select>
+                {form.etablissement_courant && options?.classes && classes.length === 0 && (
+                  <p className="mt-1 text-xs text-amber-700">Aucune classe ouverte pour l'année en cours dans cet établissement.</p>
+                )}
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="label" htmlFor="date_naissance">Date de naissance</label>
+                  <div className="relative">
+                    <CalendarDays size={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input id="date_naissance" name="date_naissance" type="date" required value={form.date_naissance} onChange={update} className="input pl-10" />
+                  </div>
+                </div>
+                <div>
+                  <label className="label" htmlFor="sexe">Sexe</label>
+                  <select id="sexe" name="sexe" value={form.sexe} onChange={update} className="input">
+                    <option value="M">Masculin</option>
+                    <option value="F">Féminin</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="label" htmlFor="matricule">Matricule (si l'école vous en a déjà donné un)</label>
+                <input id="matricule" name="matricule" value={form.matricule} onChange={update} className="input" placeholder="Ex: GS-CSMD-2026-0001" />
+                <p className="mt-1 text-xs text-slate-500">
+                  Avec votre matricule et votre date de naissance, votre compte est relié à votre dossier existant (notes, absences...).
+                </p>
+              </div>
+            </div>
           )}
 
           <div className="grid gap-4 sm:grid-cols-2">

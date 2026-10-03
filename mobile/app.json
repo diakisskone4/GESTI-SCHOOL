@@ -7,7 +7,8 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.whitetech.gestiscolaire"
     },
     "android": {
       "adaptiveIcon": {
@@ -15,13 +16,25 @@
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
-      }
+      },
+      "package": "com.whitetech.gestiscolaire"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-secure-store"
-    ]
+    ],
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#5f34dd"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "68d730aa-daa3-491a-a733-be1b02bec56f"
+      }
+    },
+    "owner": "diakiss"
   }
 }

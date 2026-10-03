@@ -16,6 +16,7 @@ export const authApi = {
   updateMe: (data) => api.patch("/auth/me/", data).then((r) => r.data),
   changePassword: (data) => api.post("/auth/change-password/", data).then((r) => r.data),
   register: (data) => api.post("/auth/register/", data).then((r) => r.data),
+  registerOptions: (params) => api.get("/auth/register/options/", { params }).then((r) => r.data),
   logout: (refresh) => api.post("/auth/logout/", { refresh }),
 };
 export const usersApi = resource("/utilisateurs");

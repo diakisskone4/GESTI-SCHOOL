@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, IdCard, Pencil, Trash2, Download, Loader2, Eye, Filter, Camera, User } from "lucide-react";
+import { Plus, IdCard, Pencil, Trash2, Download, Loader2, Eye, Filter, Camera, User, School } from "lucide-react";
 import PageHeader from "../../components/ui/PageHeader";
 import DataTable from "../../components/ui/DataTable";
 import Modal from "../../components/ui/Modal";
@@ -53,6 +53,40 @@ export default function ElevesPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [generatingCardId, setGeneratingCardId] = useState(null);
+
+  // Affectation (ou changement) de classe d'un élève existant
+  const [affectEleve, setAffectEleve] = useState(null);
+  const [affectClasseId, setAffectClasseId] = useState("");
+  const [affectSaving, setAffectSaving] = useState(false);
+
+  const openAffectation = (eleve) => {
+    setAffectEleve(eleve);
+    setAffectClasseId(classes.find((c) => c.nom === eleve.classe_actuelle)?.id || "");
+  };
+
+  const handleAffectation = async (e) => {
+    e.preventDefault();
+    const classe = classes.find((c) => c.id === affectClasseId);
+    if (!classe) return;
+    setAffectSaving(true);
+    try {
+      // Une seule inscription par élève et par année : on la met à jour si elle existe déjà.
+      const existantes = await inscriptionsApi.list({ eleve: affectEleve.id, annee_scolaire: classe.annee_scolaire });
+      const inscription = existantes.results?.[0];
+      if (inscription) {
+        await inscriptionsApi.update(inscription.id, { classe: classe.id, statut: "active" });
+      } else {
+        await inscriptionsApi.create({ eleve: affectEleve.id, classe: classe.id, annee_scolaire: classe.annee_scolaire });
+      }
+      notify(`${affectEleve.nom_complet} est affecté(e) à la classe ${classe.nom}.`, "success");
+      setAffectEleve(null);
+      reload();
+    } catch (err) {
+      notify(extractErrorMessage(err), "error");
+    } finally {
+      setAffectSaving(false);
+    }
+  };
 
   // Photo de l'élève (utilisée notamment sur la carte scolaire générée en PDF)
   const [photoFile, setPhotoFile] = useState(null);
@@ -292,6 +326,19 @@ export default function ElevesPage() {
                 </button>
 
                 <button
+                  onClick={() => openAffectation(r)}
+                  className={`flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-semibold ${
+                    r.classe_actuelle
+                      ? "border-slate-200 text-slate-600 hover:bg-slate-50"
+                      : "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                  }`}
+                  title={r.classe_actuelle ? "Changer de classe" : "Affecter à une classe"}
+                >
+                  <School size={13} />
+                  <span>{r.classe_actuelle ? "Classe" : "Affecter"}</span>
+                </button>
+
+                <button
                   onClick={() => navigate(`/eleves/${r.id}`)}
                   className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                   title="Consulter le dossier scolaire"
@@ -319,6 +366,42 @@ export default function ElevesPage() {
           },
         ]}
       />
+
+      {/* --- MODAL AFFECTATION À UNE CLASSE --- */}
+      <Modal
+        open={!!affectEleve}
+        onClose={() => setAffectEleve(null)}
+        title={affectEleve ? `Classe de ${affectEleve.nom_complet}` : ""}
+        footer={
+          <>
+            <button className="btn-secondary" onClick={() => setAffectEleve(null)}>Annuler</button>
+            <button className="btn-primary" disabled={affectSaving || !affectClasseId} form="affect-form">
+              {affectSaving && <Loader2 size={16} className="animate-spin" />}
+              Enregistrer
+            </button>
+          </>
+        }
+      >
+        <form id="affect-form" onSubmit={handleAffectation} className="space-y-3">
+          <p className="text-sm text-slate-600">
+            Classe actuelle : <strong>{affectEleve?.classe_actuelle || "aucune"}</strong>
+          </p>
+          <div>
+            <label className="label">Nouvelle classe</label>
+            <select required className="input" value={affectClasseId} onChange={(e) => setAffectClasseId(e.target.value)}>
+              <option value="">Sélectionner une classe...</option>
+              {classes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nom}{c.niveau_nom ? ` — ${c.niveau_nom}` : ""}{c.annee_scolaire_libelle ? ` (${c.annee_scolaire_libelle})` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+          <p className="text-xs text-slate-500">
+            L'élève est inscrit pour l'année scolaire de la classe choisie. S'il est déjà inscrit cette année-là, il change simplement de classe.
+          </p>
+        </form>
+      </Modal>
 
       {/* --- MODAL INSCRIPTION / MODIFICATION ÉLÈVE --- */}
       <Modal

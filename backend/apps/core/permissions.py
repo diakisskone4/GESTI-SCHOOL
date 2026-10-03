@@ -13,6 +13,12 @@ class IsAdmin(BasePermission):
         return bool(request.user and request.user.is_authenticated and request.user.est_admin)
 
 
+class IsAdminOuSurveillant(BasePermission):
+    """Administrateurs et surveillants généraux (vie scolaire : absences, discipline)."""
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated and (request.user.est_admin or request.user.est_surveillant))
+
+
 class IsEnseignant(BasePermission):
     def has_permission(self, request, view):
         return bool(request.user and request.user.is_authenticated and (request.user.est_enseignant or request.user.est_admin))

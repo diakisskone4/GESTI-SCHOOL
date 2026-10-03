@@ -114,6 +114,10 @@ class User(AbstractUser):
     def est_comptable(self):
         return self.role == self.Role.COMPTABLE
 
+    @property
+    def est_surveillant(self):
+        return self.role == self.Role.SURVEILLANT
+
 
 class LienParentEleve(models.Model):
     """Relation entre un compte parent et un ou plusieurs élèves."""

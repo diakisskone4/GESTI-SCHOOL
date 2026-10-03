@@ -77,6 +77,35 @@ class RegisterView(generics.CreateAPIView):
         return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
 
 
+class RegisterOptionsView(APIView):
+    """Données publiques du formulaire d'inscription : établissements actifs et,
+    pour l'établissement choisi, les classes de l'année scolaire en cours."""
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        from apps.core.models import Classe, Etablissement
+
+        etablissements = Etablissement.objects.filter(actif=True).order_by("nom")
+        data = {"etablissements": [{"id": e.id, "nom": e.nom, "ville": e.ville} for e in etablissements]}
+        etablissement_id = request.query_params.get("etablissement")
+        if etablissement_id:
+            classes = (
+                Classe.objects.filter(
+                    etablissement_id=etablissement_id, etablissement__actif=True, annee_scolaire__est_courante=True,
+                )
+                .select_related("niveau", "serie", "annee_scolaire")
+                .order_by("niveau__ordre", "nom")
+            )
+            data["classes"] = [
+                {
+                    "id": c.id, "nom": c.nom, "niveau": c.niveau.nom,
+                    "serie": c.serie.nom if c.serie else None, "annee_scolaire": c.annee_scolaire.libelle,
+                }
+                for c in classes
+            ]
+        return Response(data)
+
+
 class MeView(APIView):
     """Profil de l'utilisateur connecté."""
     permission_classes = [IsAuthenticated]

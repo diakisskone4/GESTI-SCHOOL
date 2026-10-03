@@ -7,6 +7,7 @@ from apps.accounts.views import (
     CustomTokenObtainPairView,
     LienParentEleveViewSet,
     MeView,
+    RegisterOptionsView,
     RegisterView,
     UserViewSet,
 )
@@ -20,6 +21,7 @@ urlpatterns = [
     path("auth/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("auth/logout/", TokenBlacklistView.as_view(), name="token_blacklist"),
     path("auth/register/", RegisterView.as_view(), name="register"),
+    path("auth/register/options/", RegisterOptionsView.as_view(), name="register_options"),
     path("auth/me/", MeView.as_view(), name="me"),
     path("auth/change-password/", ChangePasswordView.as_view(), name="change_password"),
 ] + router.urls

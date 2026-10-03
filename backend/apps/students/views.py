@@ -2,11 +2,12 @@ from django.core.files.base import ContentFile
 from django.http import FileResponse
 from rest_framework import viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.core.pdf_utils import generer_carte_scolaire_pdf
-from apps.core.permissions import IsAdmin, IsAdminOrReadOnly
+from apps.core.permissions import IsAdmin, IsAdminOrReadOnly, IsAdminOuSurveillant
 from apps.students.models import Absence, CarteScolaire, Eleve, Inscription, SanctionRecompense
 from apps.students.serializers import (
     AbsenceSerializer,
@@ -30,7 +31,7 @@ class EleveViewSet(viewsets.ModelViewSet):
         eleve = self.get_object()
         user = request.user
         est_autorise = (
-            user.est_admin or user.est_enseignant
+            user.est_admin or user.est_enseignant or user.est_surveillant
             or (user.est_eleve and eleve.user_id == user.id)
             or (user.est_parent and eleve.parents_lies.filter(parent=user).exists())
         )
@@ -62,6 +63,8 @@ class InscriptionViewSet(viewsets.ModelViewSet):
         user = self.request.user
         if user.est_admin or user.est_enseignant or user.est_comptable:
             return qs
+        if user.est_surveillant:
+            return qs.filter(eleve__etablissement__in=user.etablissements.all())
         if user.est_eleve:
             return qs.filter(eleve__user=user)
         if user.est_parent:
@@ -76,14 +79,23 @@ class InscriptionViewSet(viewsets.ModelViewSet):
 
 def _scoper_par_eleve_ou_parent(qs, user, chemin="inscription__eleve"):
     """Restreint un queryset aux données du propre profil élève (ou de l'enfant, pour un parent).
-    Admin et enseignant voient tout ; les autres rôles ne voient rien."""
+    Admin et enseignant voient tout ; le surveillant voit les élèves de ses établissements ;
+    les autres rôles ne voient rien."""
     if user.est_admin or user.est_enseignant:
         return qs
+    if user.est_surveillant:
+        return qs.filter(**{f"{chemin}__etablissement__in": user.etablissements.all()})
     if user.est_eleve:
         return qs.filter(**{f"{chemin}__user": user})
     if user.est_parent:
         return qs.filter(**{f"{chemin}__parents_lies__parent": user})
     return qs.none()
+
+
+def _verifier_inscription_accessible(user, inscription):
+    """Un surveillant ne peut agir que sur les élèves de ses établissements."""
+    if user.est_surveillant and not user.etablissements.filter(pk=inscription.eleve.etablissement_id).exists():
+        raise PermissionDenied("Cet élève n'appartient pas à votre établissement.")
 
 
 class AbsenceViewSet(viewsets.ModelViewSet):
@@ -96,21 +108,38 @@ class AbsenceViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ("create", "update", "partial_update", "destroy"):
-            return [IsAdmin()]
+            return [IsAdminOuSurveillant()]
         return [IsAuthenticated()]
 
     def perform_create(self, serializer):
+        _verifier_inscription_accessible(self.request.user, serializer.validated_data["inscription"])
         serializer.save(signale_par=self.request.user)
+
+    def perform_update(self, serializer):
+        _verifier_inscription_accessible(
+            self.request.user, serializer.validated_data.get("inscription", serializer.instance.inscription)
+        )
+        serializer.save()
 
 
 class SanctionRecompenseViewSet(viewsets.ModelViewSet):
-    queryset = SanctionRecompense.objects.select_related("inscription__eleve")
     serializer_class = SanctionRecompenseSerializer
-    permission_classes = [IsAdmin]
+    permission_classes = [IsAdminOuSurveillant]
     filterset_fields = ["inscription", "nature", "periode"]
 
+    def get_queryset(self):
+        qs = SanctionRecompense.objects.select_related("inscription__eleve")
+        return _scoper_par_eleve_ou_parent(qs, self.request.user)
+
     def perform_create(self, serializer):
+        _verifier_inscription_accessible(self.request.user, serializer.validated_data["inscription"])
         serializer.save(decidee_par=self.request.user)
+
+    def perform_update(self, serializer):
+        _verifier_inscription_accessible(
+            self.request.user, serializer.validated_data.get("inscription", serializer.instance.inscription)
+        )
+        serializer.save()
 
 
 class CarteScolaireViewSet(viewsets.ModelViewSet):
