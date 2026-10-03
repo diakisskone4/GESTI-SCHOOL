@@ -32,6 +32,28 @@
   }
   body {
     @apply bg-canvas text-slate-800 antialiased;
+    /* Ressenti d'application native : pas de flash gris au toucher, pas de zoom au double-tap */
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    -webkit-text-size-adjust: 100%;
+  }
+  /* Application installée : pas de rebond ni de rafraîchissement du navigateur
+     (remplacé par notre « tirer pour actualiser », voir PullToRefresh.jsx) */
+  @media (display-mode: standalone) {
+    html, body {
+      overscroll-behavior-y: none;
+    }
+  }
+  button, a, [role="button"], nav {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+  /* iOS zoome automatiquement sur les champs dont le texte fait moins de 16px */
+  @media (max-width: 1023px) {
+    input, select, textarea {
+      font-size: 16px !important;
+    }
   }
   ::selection {
     @apply bg-brand-200 text-brand-900;
@@ -67,7 +89,8 @@
     @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold;
   }
   .table-shell {
-    @apply w-full overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-[var(--shadow-card)];
+    @apply w-full overflow-x-auto rounded-2xl border border-slate-100 bg-white shadow-[var(--shadow-card)];
+    -webkit-overflow-scrolling: touch;
   }
   .table-shell table {
     @apply w-full text-left text-sm;
@@ -76,9 +99,90 @@
     @apply bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500;
   }
   .table-shell th, .table-shell td {
-    @apply px-4 py-3;
+    @apply px-4 py-3 whitespace-nowrap lg:whitespace-normal;
   }
   .table-shell tbody tr {
     @apply border-t border-slate-100 hover:bg-brand-50/40 transition-colors;
   }
+}
+
+/* --------------------------------------------------------------------------
+   Application mobile (PWA) : barres, zones de sécurité, retours tactiles, animations
+   -------------------------------------------------------------------------- */
+@layer components {
+  /* Barre du haut sous l'encoche / la barre d'état */
+  .app-topbar {
+    padding-top: max(0.625rem, env(safe-area-inset-top));
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+  /* Contenu : laisse la place à la barre d'onglets et à la barre d'accueil iOS */
+  .app-main {
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+  }
+  @media (min-width: 1024px) {
+    .app-topbar { padding-top: 0.75rem; }
+    .app-main { padding-bottom: 1.5rem; }
+  }
+
+  .mobile-tabbar {
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+  .tab-item {
+    @apply flex flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .tab-icon {
+    @apply relative flex h-8 w-14 items-center justify-center rounded-full transition-all duration-200;
+  }
+  .tab-item:active .tab-icon {
+    transform: scale(0.9);
+  }
+
+  /* Retour visuel au toucher */
+  .press {
+    @apply transition-transform duration-100;
+  }
+  .press:active {
+    transform: scale(0.97);
+  }
+}
+
+@media (hover: none) {
+  .btn-primary:active, .btn-secondary:active, .btn-ghost:active, .btn-danger:active {
+    transform: scale(0.97);
+  }
+}
+
+/* Animations : entrée de page, panneaux qui glissent depuis le bas */
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes sheet-up {
+  from { transform: translateY(100%); }
+  to { transform: none; }
+}
+@keyframes sheet-zoom {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.page-enter { animation: page-enter 0.22s ease-out; }
+.sheet-backdrop { animation: fade-in 0.2s ease-out; }
+.sheet-panel { animation: sheet-up 0.28s cubic-bezier(0.32, 0.72, 0, 1); }
+@media (min-width: 640px) {
+  .sheet-panel { animation: sheet-zoom 0.18s ease-out; }
+}
+@media (min-width: 1024px) {
+  /* Le panneau « Menu » n'existe que sur mobile ; les fenêtres restent centrées */
+  .sheet-panel { animation: sheet-zoom 0.18s ease-out; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .page-enter, .sheet-backdrop, .sheet-panel { animation: none; }
 }

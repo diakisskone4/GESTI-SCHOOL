@@ -91,7 +91,7 @@ export default function Login() {
           </p>
 
           <p className="mt-3 text-center text-xs text-slate-400">
-            Compte de démonstration : admin@gesti-scolaire.local / Admin@1234
+           
           </p>
         </form>
       </div>

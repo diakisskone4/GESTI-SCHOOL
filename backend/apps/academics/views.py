@@ -1,14 +1,20 @@
 import io
+from decimal import Decimal, InvalidOperation
+
 import openpyxl
+from django.db import transaction
+from django.db.models import ProtectedError
 from django.http import FileResponse, HttpResponse
-from rest_framework import viewsets
+from rest_framework import serializers, status, viewsets
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from apps.academics.models import Bulletin, Examen, MoyenneMatiere, Note, TableauHonneur, TypeEvaluation
+from apps.academics.models import Bulletin, Evaluation, Examen, MoyenneMatiere, Note, TableauHonneur, TypeEvaluation
 from apps.academics.serializers import (
     BulletinSerializer,
+    EvaluationSerializer,
     ExamenSerializer,
     MoyenneMatiereSerializer,
     NoteSerializer,
@@ -19,16 +25,174 @@ from apps.academics.services import (
     calculer_moyenne_generale_et_rangs,
     calculer_moyennes_matiere,
     generer_pdf_bulletin,
+    moyenne_ponderee,
 )
 from apps.core.models import Classe, Periode
-from apps.core.permissions import IsAdmin, IsAdminOrEnseignantReadWrite
+from apps.core.permissions import IsAdmin, IsAdminOrEnseignantReadWrite, IsAdminOrReadOnly
+
+
+TYPES_EVALUATION_PAR_DEFAUT = [
+    {"nom": "Interrogation", "ponderation": Decimal("1"), "ordre": 1},
+    {"nom": "Devoir", "ponderation": Decimal("1"), "ordre": 2},
+    {"nom": "Composition", "ponderation": Decimal("2"), "ordre": 3},
+]
 
 
 class TypeEvaluationViewSet(viewsets.ModelViewSet):
+    """Types d'évaluation et leur poids : lecture pour tous, modification par l'administration."""
     queryset = TypeEvaluation.objects.all()
     serializer_class = TypeEvaluationSerializer
-    permission_classes = [IsAdmin]
+    permission_classes = [IsAdminOrReadOnly]
     filterset_fields = ["etablissement"]
+
+    def perform_destroy(self, instance):
+        try:
+            instance.delete()
+        except ProtectedError:
+            raise serializers.ValidationError(
+                {"detail": "Ce type est utilisé par des évaluations : supprimez-les ou changez leur type d'abord."}
+            )
+
+    @action(detail=False, methods=["post"])
+    def initialiser(self, request):
+        """Crée les types par défaut (Interrogation ×1, Devoir ×1, Composition ×2) s'ils n'existent pas."""
+        etablissement_id = request.data.get("etablissement") or request.user.etablissement_courant_id
+        if not etablissement_id:
+            raise serializers.ValidationError({"etablissement": "Établissement requis."})
+        for t in TYPES_EVALUATION_PAR_DEFAUT:
+            TypeEvaluation.objects.get_or_create(
+                etablissement_id=etablissement_id, nom=t["nom"],
+                defaults={"ponderation": t["ponderation"], "ordre": t["ordre"]},
+            )
+        types = TypeEvaluation.objects.filter(etablissement_id=etablissement_id)
+        return Response(TypeEvaluationSerializer(types, many=True).data)
+
+
+class EvaluationViewSet(viewsets.ModelViewSet):
+    """Évaluations (colonnes du carnet de notes) et saisie groupée des notes."""
+    serializer_class = EvaluationSerializer
+    permission_classes = [IsAdminOrEnseignantReadWrite]
+    filterset_fields = ["classe", "matiere", "periode", "type_evaluation"]
+
+    def get_queryset(self):
+        qs = Evaluation.objects.select_related("type_evaluation", "matiere", "classe", "periode")
+        user = self.request.user
+        if user.est_admin or user.est_enseignant:
+            return qs
+        if user.est_eleve:
+            return qs.filter(classe__inscriptions__eleve__user=user).distinct()
+        if user.est_parent:
+            return qs.filter(classe__inscriptions__eleve__parents_lies__parent=user).distinct()
+        return qs.none()
+
+    def _enseignant(self):
+        from apps.staff.models import Enseignant
+        return Enseignant.objects.filter(user=self.request.user).first()
+
+    def perform_create(self, serializer):
+        serializer.save(enseignant=self._enseignant())
+
+    def perform_update(self, serializer):
+        evaluation = serializer.save()
+        # Les notes recopient le type, le barème et la date de leur évaluation (utilisés par le calcul des moyennes).
+        evaluation.notes.update(
+            type_evaluation=evaluation.type_evaluation, bareme=evaluation.bareme,
+            date_evaluation=evaluation.date_evaluation, matiere=evaluation.matiere, periode=evaluation.periode,
+        )
+
+    @action(detail=False, methods=["get"])
+    def carnet(self, request):
+        """Carnet de notes d'une classe pour une matière et une période :
+        évaluations (colonnes), élèves (lignes), notes et moyenne pondérée de chaque élève."""
+        from apps.students.models import Inscription
+
+        user = request.user
+        if not (user.est_admin or user.est_enseignant):
+            raise PermissionDenied("Réservé à l'administration et aux enseignants.")
+        params = request.query_params
+        manquants = [p for p in ("classe", "matiere", "periode") if not params.get(p)]
+        if manquants:
+            raise serializers.ValidationError({p: "Paramètre requis." for p in manquants})
+
+        classe = Classe.objects.get(pk=params["classe"])
+        evaluations = list(
+            self.get_queryset().filter(classe=classe, matiere_id=params["matiere"], periode_id=params["periode"])
+        )
+        inscriptions = (
+            Inscription.objects.filter(classe=classe, statut="active")
+            .select_related("eleve").order_by("eleve__nom", "eleve__prenom")
+        )
+        notes = Note.objects.filter(
+            inscription__in=inscriptions, matiere_id=params["matiere"], periode_id=params["periode"],
+        ).select_related("type_evaluation")
+        par_inscription = {}
+        for note in notes:
+            par_inscription.setdefault(note.inscription_id, []).append(note)
+
+        eleves = []
+        for insc in inscriptions:
+            notes_eleve = par_inscription.get(insc.id, [])
+            moyenne = moyenne_ponderee(notes_eleve)
+            eleves.append({
+                "inscription": insc.id,
+                "nom": f"{insc.eleve.nom} {insc.eleve.prenom}",
+                "matricule": insc.eleve.matricule,
+                "notes": {str(n.evaluation_id): str(n.valeur) for n in notes_eleve if n.evaluation_id},
+                "notes_hors_evaluation": [n.valeur_sur_20 for n in notes_eleve if not n.evaluation_id],
+                "moyenne": float(moyenne) if moyenne is not None else None,
+            })
+        types = TypeEvaluation.objects.filter(etablissement=classe.etablissement)
+        return Response({
+            "types": TypeEvaluationSerializer(types, many=True).data,
+            "evaluations": EvaluationSerializer(evaluations, many=True).data,
+            "eleves": eleves,
+        })
+
+    @action(detail=True, methods=["post"])
+    def saisir_notes(self, request, pk=None):
+        """Enregistre les notes d'une évaluation en une fois.
+        Corps : {"notes": [{"inscription": id, "valeur": "14.5"}, ...]} ; une valeur vide efface la note."""
+        evaluation = self.get_object()
+        inscriptions_valides = {
+            str(i) for i in evaluation.classe.inscriptions.filter(statut="active").values_list("id", flat=True)
+        }
+        erreurs, a_enregistrer, a_effacer = {}, [], []
+        for ligne in request.data.get("notes") or []:
+            inscription_id = str(ligne.get("inscription"))
+            if inscription_id not in inscriptions_valides:
+                erreurs[inscription_id] = "Cet élève n'est pas inscrit dans cette classe."
+                continue
+            valeur = ligne.get("valeur")
+            if valeur in (None, ""):
+                a_effacer.append(inscription_id)
+                continue
+            try:
+                valeur = Decimal(str(valeur).replace(",", "."))
+            except InvalidOperation:
+                erreurs[inscription_id] = "Note invalide."
+                continue
+            if valeur < 0 or valeur > evaluation.bareme:
+                erreurs[inscription_id] = f"La note doit être comprise entre 0 et {evaluation.bareme:g}."
+                continue
+            a_enregistrer.append((inscription_id, valeur))
+        if erreurs:
+            return Response(
+                {"detail": "Certaines notes sont invalides.", "erreurs": erreurs}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        enseignant = self._enseignant() or evaluation.enseignant
+        with transaction.atomic():
+            evaluation.notes.filter(inscription_id__in=a_effacer).delete()
+            for inscription_id, valeur in a_enregistrer:
+                Note.objects.update_or_create(
+                    evaluation=evaluation, inscription_id=inscription_id,
+                    defaults={
+                        "valeur": valeur, "bareme": evaluation.bareme, "matiere": evaluation.matiere,
+                        "periode": evaluation.periode, "type_evaluation": evaluation.type_evaluation,
+                        "date_evaluation": evaluation.date_evaluation, "enseignant": enseignant,
+                    },
+                )
+        return Response({"enregistrees": len(a_enregistrer), "effacees": len(a_effacer)})
 
 
 def _scoper_par_eleve_ou_parent(qs, user, chemin="inscription__eleve"):
@@ -46,7 +210,7 @@ def _scoper_par_eleve_ou_parent(qs, user, chemin="inscription__eleve"):
 class NoteViewSet(viewsets.ModelViewSet):
     serializer_class = NoteSerializer
     permission_classes = [IsAdminOrEnseignantReadWrite]
-    filterset_fields = ["inscription", "matiere", "periode", "type_evaluation", "enseignant"]
+    filterset_fields = ["inscription", "matiere", "periode", "type_evaluation", "enseignant", "evaluation"]
     search_fields = ["inscription__eleve__nom", "inscription__eleve__prenom"]
 
     def get_queryset(self):

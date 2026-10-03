@@ -59,25 +59,36 @@ export default function ElevesPage() {
   const [affectClasseId, setAffectClasseId] = useState("");
   const [affectSaving, setAffectSaving] = useState(false);
 
+  // Les <select> renvoient des chaînes alors que les identifiants de classe sont des nombres.
+  const trouverClasse = (classeId) => classes.find((c) => String(c.id) === String(classeId));
+  const classeActuelleId = (eleve) => classes.find((c) => c.nom === eleve.classe_actuelle)?.id ?? "";
+
+  /** Inscrit l'élève dans la classe, ou le change de classe s'il est déjà inscrit cette année-là. */
+  const affecterClasse = async (eleveId, classe) => {
+    const existantes = await inscriptionsApi.list({ eleve: eleveId, annee_scolaire: classe.annee_scolaire });
+    const inscription = existantes.results?.[0];
+    if (inscription) {
+      await inscriptionsApi.update(inscription.id, { classe: classe.id, statut: "active" });
+    } else {
+      await inscriptionsApi.create({ eleve: eleveId, classe: classe.id, annee_scolaire: classe.annee_scolaire });
+    }
+  };
+
   const openAffectation = (eleve) => {
     setAffectEleve(eleve);
-    setAffectClasseId(classes.find((c) => c.nom === eleve.classe_actuelle)?.id || "");
+    setAffectClasseId(String(classeActuelleId(eleve)));
   };
 
   const handleAffectation = async (e) => {
     e.preventDefault();
-    const classe = classes.find((c) => c.id === affectClasseId);
-    if (!classe) return;
+    const classe = trouverClasse(affectClasseId);
+    if (!classe) {
+      notify("Sélectionnez une classe.", "error");
+      return;
+    }
     setAffectSaving(true);
     try {
-      // Une seule inscription par élève et par année : on la met à jour si elle existe déjà.
-      const existantes = await inscriptionsApi.list({ eleve: affectEleve.id, annee_scolaire: classe.annee_scolaire });
-      const inscription = existantes.results?.[0];
-      if (inscription) {
-        await inscriptionsApi.update(inscription.id, { classe: classe.id, statut: "active" });
-      } else {
-        await inscriptionsApi.create({ eleve: affectEleve.id, classe: classe.id, annee_scolaire: classe.annee_scolaire });
-      }
+      await affecterClasse(affectEleve.id, classe);
       notify(`${affectEleve.nom_complet} est affecté(e) à la classe ${classe.nom}.`, "success");
       setAffectEleve(null);
       reload();
@@ -107,7 +118,7 @@ export default function ElevesPage() {
   // Filtrage côté client si classe sélectionnée
   const elevesList = (data?.results || []).filter((el) => {
     if (!selectedClasseFilter) return true;
-    return el.classe_actuelle === classes.find((c) => c.id === selectedClasseFilter)?.nom;
+    return el.classe_actuelle === trouverClasse(selectedClasseFilter)?.nom;
   });
 
   const openCreate = () => {
@@ -141,7 +152,7 @@ export default function ElevesPage() {
       contact_urgence_nom: eleve.contact_urgence_nom || "",
       contact_urgence_telephone: eleve.contact_urgence_telephone || "",
       allergies_ou_besoins_speciaux: eleve.allergies_ou_besoins_speciaux || "",
-      classe: "",
+      classe: String(classeActuelleId(eleve)),
       annee_scolaire: "",
     });
     setPhotoFile(null);
@@ -167,7 +178,13 @@ export default function ElevesPage() {
       if (editingEleve) {
         const { classe, annee_scolaire, ...eleveData } = form;
         await elevesApi.update(editingEleve.id, buildPayload(eleveData));
-        notify("Profil élève mis à jour avec succès.", "success");
+        const nouvelleClasse = trouverClasse(classe);
+        if (nouvelleClasse && String(nouvelleClasse.id) !== String(classeActuelleId(editingEleve))) {
+          await affecterClasse(editingEleve.id, nouvelleClasse);
+          notify(`Profil mis à jour et élève affecté(e) à la classe ${nouvelleClasse.nom}.`, "success");
+        } else {
+          notify("Profil élève mis à jour avec succès.", "success");
+        }
       } else {
         const { classe, annee_scolaire, ...eleveData } = form;
         const eleve = await elevesApi.create(buildPayload(eleveData, { etablissement: etablissementId }));
@@ -598,6 +615,34 @@ export default function ElevesPage() {
               />
             </div>
           </div>
+
+          {editingEleve && (
+            <>
+              <div className="border-b border-slate-100 pt-2 pb-1">
+                <p className="text-xs font-bold uppercase tracking-wider text-brand-600">Classe</p>
+              </div>
+              <div>
+                <label className="label">
+                  Classe de l'élève <span className="font-normal text-slate-400">(actuelle : {editingEleve.classe_actuelle || "aucune"})</span>
+                </label>
+                <select
+                  className="input"
+                  value={form.classe}
+                  onChange={(e) => setForm({ ...form, classe: e.target.value })}
+                >
+                  <option value="">{editingEleve.classe_actuelle ? "-- Ne pas changer --" : "-- Sans classe pour l'instant --"}</option>
+                  {classes.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nom}{c.niveau_nom ? ` — ${c.niveau_nom}` : ""}{c.annee_scolaire_libelle ? ` (${c.annee_scolaire_libelle})` : ""}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-slate-500">
+                  S'il est déjà inscrit pour l'année de cette classe, il change simplement de classe.
+                </p>
+              </div>
+            </>
+          )}
 
           {!editingEleve && (
             <>

@@ -1,12 +1,37 @@
 from rest_framework import serializers
 
-from apps.academics.models import Bulletin, Examen, MoyenneMatiere, Note, TableauHonneur, TypeEvaluation
+from apps.academics.models import Bulletin, Evaluation, Examen, MoyenneMatiere, Note, TableauHonneur, TypeEvaluation
 
 
 class TypeEvaluationSerializer(serializers.ModelSerializer):
     class Meta:
         model = TypeEvaluation
         fields = "__all__"
+
+
+class EvaluationSerializer(serializers.ModelSerializer):
+    type_nom = serializers.CharField(source="type_evaluation.nom", read_only=True)
+    ponderation = serializers.DecimalField(source="type_evaluation.ponderation", max_digits=4, decimal_places=2, read_only=True)
+    matiere_nom = serializers.CharField(source="matiere.nom", read_only=True)
+    nb_notes = serializers.IntegerField(source="notes.count", read_only=True)
+
+    class Meta:
+        model = Evaluation
+        fields = "__all__"
+        read_only_fields = ["enseignant"]
+
+    def validate(self, attrs):
+        classe = attrs.get("classe") or self.instance.classe
+        periode = attrs.get("periode") or self.instance.periode
+        type_eval = attrs.get("type_evaluation") or self.instance.type_evaluation
+        if periode.annee_scolaire_id != classe.annee_scolaire_id:
+            raise serializers.ValidationError({"periode": "Cette période n'appartient pas à l'année scolaire de la classe."})
+        if type_eval.etablissement_id != classe.etablissement_id:
+            raise serializers.ValidationError({"type_evaluation": "Ce type d'évaluation appartient à un autre établissement."})
+        bareme = attrs.get("bareme")
+        if bareme is not None and bareme <= 0:
+            raise serializers.ValidationError({"bareme": "Le barème doit être supérieur à 0."})
+        return attrs
 
 
 class NoteSerializer(serializers.ModelSerializer):

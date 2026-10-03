@@ -5,7 +5,7 @@
  * - Fichiers du build (/assets/*, nommés avec un hash) : cache d'abord, ils ne changent jamais.
  * - Tout le reste (API, autres domaines) : réseau uniquement.
  */
-const CACHE = "gesti-scolaire-v1";
+const CACHE = "gesti-scolaire-v2";
 const APP_SHELL = ["/", "/index.html", "/manifest.webmanifest", "/icons/icon-192.png", "/icons/icon-512.png"];
 
 self.addEventListener("install", (event) => {

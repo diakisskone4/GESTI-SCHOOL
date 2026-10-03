@@ -68,7 +68,15 @@ export const presencesEmployesApi = resource("/presences-employes");
 export const documentsPedagogiquesApi = resource("/documents-pedagogiques");
 
 // --- Academics --------------------------------------------------------
-export const typesEvaluationApi = resource("/types-evaluation");
+export const typesEvaluationApi = {
+  ...resource("/types-evaluation"),
+  initialiser: (etablissement) => api.post("/types-evaluation/initialiser/", { etablissement }).then((r) => r.data),
+};
+export const evaluationsApi = {
+  ...resource("/evaluations"),
+  carnet: (params) => api.get("/evaluations/carnet/", { params }).then((r) => r.data),
+  saisirNotes: (id, notes) => api.post(`/evaluations/${id}/saisir_notes/`, { notes }).then((r) => r.data),
+};
 export const notesApi = resource("/notes");
 export const moyennesMatieresApi = resource("/moyennes-matieres");
 export const bulletinsApi = {

@@ -9,17 +9,41 @@ class TypeEvaluation(TimeStampedModel):
     etablissement = models.ForeignKey("core.Etablissement", on_delete=models.CASCADE, related_name="types_evaluation")
     nom = models.CharField(max_length=60)
     ponderation = models.DecimalField(max_digits=4, decimal_places=2, default=1, help_text="Poids relatif dans la moyenne de la matière")
+    ordre = models.PositiveSmallIntegerField(default=0, help_text="Ordre d'affichage des colonnes dans le carnet de notes")
 
     class Meta:
         unique_together = ("etablissement", "nom")
+        ordering = ["ordre", "nom"]
 
     def __str__(self):
         return self.nom
 
 
+class Evaluation(TimeStampedModel):
+    """Une évaluation donnée à une classe (ex: « Interrogation 2 » de maths du 1er trimestre).
+    Elle regroupe les notes de tous les élèves : c'est une colonne du carnet de notes."""
+    classe = models.ForeignKey("core.Classe", on_delete=models.CASCADE, related_name="evaluations")
+    matiere = models.ForeignKey("core.Matiere", on_delete=models.CASCADE, related_name="evaluations")
+    periode = models.ForeignKey("core.Periode", on_delete=models.CASCADE, related_name="evaluations")
+    type_evaluation = models.ForeignKey(TypeEvaluation, on_delete=models.PROTECT, related_name="evaluations")
+    libelle = models.CharField(max_length=100)
+    date_evaluation = models.DateField(null=True, blank=True)
+    bareme = models.DecimalField(max_digits=5, decimal_places=2, default=20)
+    enseignant = models.ForeignKey("staff.Enseignant", on_delete=models.SET_NULL, null=True, blank=True, related_name="evaluations")
+
+    class Meta:
+        ordering = ["type_evaluation__ordre", "date_evaluation", "created_at"]
+        verbose_name = "Évaluation"
+        verbose_name_plural = "Évaluations"
+
+    def __str__(self):
+        return f"{self.libelle} - {self.matiere} - {self.classe}"
+
+
 class Note(TimeStampedModel):
     """Note d'un élève dans une matière, pour une évaluation et une période données."""
     inscription = models.ForeignKey("students.Inscription", on_delete=models.CASCADE, related_name="notes")
+    evaluation = models.ForeignKey(Evaluation, on_delete=models.CASCADE, null=True, blank=True, related_name="notes")
     matiere = models.ForeignKey("core.Matiere", on_delete=models.CASCADE, related_name="notes")
     periode = models.ForeignKey("core.Periode", on_delete=models.CASCADE, related_name="notes")
     type_evaluation = models.ForeignKey(TypeEvaluation, on_delete=models.SET_NULL, null=True, blank=True, related_name="notes")
@@ -33,6 +57,12 @@ class Note(TimeStampedModel):
         ordering = ["-periode", "matiere"]
         verbose_name = "Note"
         verbose_name_plural = "Notes"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["evaluation", "inscription"], condition=models.Q(evaluation__isnull=False),
+                name="note_unique_par_evaluation",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.inscription.eleve} - {self.matiere} - {self.valeur}/{self.bareme}"

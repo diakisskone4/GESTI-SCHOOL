@@ -57,7 +57,7 @@ export default function InstallPrompt() {
   if (masque || (!deferred && !ios)) return null;
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-50 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:bottom-4 sm:left-auto sm:right-4 sm:w-96 sm:p-0">
+    <div className="fixed inset-x-0 bottom-[calc(4.25rem+env(safe-area-inset-bottom))] z-50 p-3 sm:left-auto sm:right-4 sm:w-96 sm:p-0 lg:bottom-4">
       <div className="flex items-start gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
         <img src="/icons/icon-192.png" alt="" className="h-11 w-11 shrink-0 rounded-xl" />
         <div className="min-w-0 flex-1">

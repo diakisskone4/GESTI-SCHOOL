@@ -2,6 +2,7 @@ from rest_framework.routers import DefaultRouter
 
 from apps.academics.views import (
     BulletinViewSet,
+    EvaluationViewSet,
     ExamenViewSet,
     ExportResultatsView,
     MoyenneMatiereViewSet,
@@ -12,6 +13,7 @@ from apps.academics.views import (
 
 router = DefaultRouter()
 router.register(r"types-evaluation", TypeEvaluationViewSet, basename="type-evaluation")
+router.register(r"evaluations", EvaluationViewSet, basename="evaluation")
 router.register(r"notes", NoteViewSet, basename="note")
 router.register(r"moyennes-matieres", MoyenneMatiereViewSet, basename="moyenne-matiere")
 router.register(r"bulletins", BulletinViewSet, basename="bulletin")

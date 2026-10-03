@@ -12,6 +12,30 @@ def _round2(value):
     return Decimal(value).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
+def moyenne_ponderee(notes):
+    """Moyenne /20 d'un élève dans une matière.
+
+    On calcule d'abord la moyenne de chaque type d'évaluation (interrogations, devoirs,
+    compositions...), puis la moyenne de ces moyennes pondérée par le poids du type.
+    Ex. Interrogation ×1, Devoir ×1, Composition ×2 → (moy. interros + moy. devoirs + 2 × compo) / 4.
+    Les notes sans type forment un groupe de poids 1. Retourne None s'il n'y a aucune note."""
+    groupes = {}
+    for note in notes:
+        type_eval = note.type_evaluation
+        cle = type_eval.pk if type_eval else None
+        poids = type_eval.ponderation if type_eval else Decimal("1")
+        groupe = groupes.setdefault(cle, {"poids": Decimal(poids), "valeurs": []})
+        groupe["valeurs"].append(Decimal(str(note.valeur_sur_20)))
+    total_poids = sum((g["poids"] for g in groupes.values() if g["poids"] > 0), Decimal("0"))
+    if not total_poids:
+        return None
+    total = sum(
+        (g["poids"] * sum(g["valeurs"]) / len(g["valeurs"]) for g in groupes.values() if g["poids"] > 0),
+        Decimal("0"),
+    )
+    return _round2(total / total_poids)
+
+
 def calculer_moyennes_matiere(classe, periode):
     """Calcule/recalcule la moyenne de chaque élève de la classe, pour chaque matière, sur la période."""
     inscriptions = classe.inscriptions.filter(statut="active", annee_scolaire=periode.annee_scolaire)
@@ -20,16 +44,12 @@ def calculer_moyennes_matiere(classe, periode):
     for matiere_id in matieres_ids:
         resultats = []
         for inscription in inscriptions:
-            notes = Note.objects.filter(inscription=inscription, matiere_id=matiere_id, periode=periode)
-            if not notes.exists():
+            notes = Note.objects.filter(
+                inscription=inscription, matiere_id=matiere_id, periode=periode,
+            ).select_related("type_evaluation")
+            moyenne = moyenne_ponderee(notes)
+            if moyenne is None:
                 continue
-            total_pondere = Decimal("0")
-            total_poids = Decimal("0")
-            for note in notes:
-                poids = note.type_evaluation.ponderation if note.type_evaluation else Decimal("1")
-                total_pondere += Decimal(str(note.valeur_sur_20)) * poids
-                total_poids += poids
-            moyenne = _round2(total_pondere / total_poids) if total_poids else Decimal("0")
             from apps.core.models import Matiere
             matiere = Matiere.objects.get(pk=matiere_id)
             mm, _ = MoyenneMatiere.objects.update_or_create(

@@ -45,3 +45,63 @@ export const NAV_SECTIONS = [
     ],
   },
 ];
+
+/**
+ * Onglets de la barre de navigation mobile (4 maximum, le 5e est toujours « Menu »).
+ * Les chemins doivent exister dans NAV_SECTIONS ; l'icône et le libellé court viennent d'ici.
+ */
+export const MOBILE_TABS = {
+  admin: [
+    { label: "Accueil", to: "/", icon: LayoutDashboard },
+    { label: "Élèves", to: "/eleves", icon: Users },
+    { label: "Notes", to: "/academique/bulletins", icon: BookOpenCheck },
+    { label: "Messages", to: "/messages", icon: MessageSquare, badge: "messages" },
+  ],
+  enseignant: [
+    { label: "Accueil", to: "/", icon: LayoutDashboard },
+    { label: "Notes", to: "/academique/bulletins", icon: BookOpenCheck },
+    { label: "Absences", to: "/absences", icon: ClipboardList },
+    { label: "Messages", to: "/messages", icon: MessageSquare, badge: "messages" },
+  ],
+  surveillant: [
+    { label: "Accueil", to: "/", icon: LayoutDashboard },
+    { label: "Absences", to: "/absences", icon: ClipboardList },
+    { label: "Annonces", to: "/annonces", icon: Megaphone },
+    { label: "Messages", to: "/messages", icon: MessageSquare, badge: "messages" },
+  ],
+  comptable: [
+    { label: "Accueil", to: "/", icon: LayoutDashboard },
+    { label: "Factures", to: "/finance/factures", icon: Wallet },
+    { label: "Paie", to: "/paie", icon: Banknote },
+    { label: "Messages", to: "/messages", icon: MessageSquare, badge: "messages" },
+  ],
+  eleve: [
+    { label: "Accueil", to: "/", icon: LayoutDashboard },
+    { label: "Annonces", to: "/annonces", icon: Megaphone },
+    { label: "Messages", to: "/messages", icon: MessageSquare, badge: "messages" },
+  ],
+};
+MOBILE_TABS.superadmin = MOBILE_TABS.admin;
+MOBILE_TABS.parent = MOBILE_TABS.eleve;
+
+const TITRES_EXTRA = [
+  { pattern: /^\/eleves\/[^/]+$/, titre: "Dossier élève", retour: "/eleves" },
+  { pattern: /^\/profil$/, titre: "Mon profil" },
+];
+
+/** Titre affiché dans la barre du haut sur mobile, et page « parente » pour le bouton retour. */
+export function infosPage(pathname) {
+  const extra = TITRES_EXTRA.find((t) => t.pattern.test(pathname));
+  if (extra) return { titre: extra.titre, retour: extra.retour ?? null };
+  for (const section of NAV_SECTIONS) {
+    const item = section.items.find((i) => i.to === pathname);
+    if (item) return { titre: item.to === "/" ? "Gesti-Scolaire" : item.label, retour: null };
+  }
+  return { titre: "Gesti-Scolaire", retour: null };
+}
+
+/** Éléments du menu accessibles au rôle, par section. */
+export function sectionsPourRole(role) {
+  return NAV_SECTIONS.map((s) => ({ ...s, items: s.items.filter((i) => !i.roles || i.roles.includes(role)) }))
+    .filter((s) => s.items.length);
+}
