@@ -3,6 +3,7 @@ from django.db import transaction
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
+from apps.accounts.doublons import verifier_eleve_unique, verifier_email_utilisateur, verifier_telephone_utilisateur
 from apps.accounts.models import LienParentEleve, User
 from apps.core.models import Classe
 from apps.students.models import Eleve, Inscription
@@ -26,6 +27,12 @@ class UserSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "date_joined", "date_derniere_activite"]
 
+    def validate_email(self, value):
+        return verifier_email_utilisateur(value, exclure_pk=getattr(self.instance, "pk", None))
+
+    def validate_telephone(self, value):
+        return verifier_telephone_utilisateur(value, exclure_pk=getattr(self.instance, "pk", None))
+
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
@@ -46,6 +53,12 @@ class RegisterSerializer(serializers.ModelSerializer):
             "role", "telephone", "etablissement_courant",
             "classe", "sexe", "date_naissance", "matricule",
         ]
+
+    def validate_email(self, value):
+        return verifier_email_utilisateur(value)
+
+    def validate_telephone(self, value):
+        return verifier_telephone_utilisateur(value)
 
     def validate(self, attrs):
         if attrs["password"] != attrs.pop("password_confirm"):
@@ -75,8 +88,17 @@ class RegisterSerializer(serializers.ModelSerializer):
                 elif classe and eleve.etablissement_id != classe.etablissement_id:
                     erreurs["matricule"] = "Ce matricule appartient à un autre établissement."
                 attrs["eleve_existant"] = eleve
-            elif not attrs.get("sexe"):
-                erreurs["sexe"] = "Le sexe est obligatoire."
+            else:
+                if not attrs.get("sexe"):
+                    erreurs["sexe"] = "Le sexe est obligatoire."
+                if classe and attrs.get("date_naissance"):
+                    try:
+                        verifier_eleve_unique(attrs.get("last_name"), attrs.get("first_name"),
+                                              attrs["date_naissance"], classe.etablissement_id)
+                    except serializers.ValidationError as exc:
+                        erreurs["matricule"] = (
+                            f"{exc.detail[0]} Si c'est vous, renseignez ce matricule pour relier votre compte à votre dossier."
+                        )
             if erreurs:
                 raise serializers.ValidationError(erreurs)
             attrs["etablissement_courant"] = classe.etablissement
@@ -136,6 +158,10 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         return token
 
     def validate(self, attrs):
+        # « Ali@Gmail.com » et « ali@gmail.com » désignent le même compte
+        email = (attrs.get("email") or "").strip()
+        existant = User.objects.filter(email__iexact=email).values_list("email", flat=True).first()
+        attrs["email"] = existant or email
         data = super().validate(attrs)
         data["user"] = UserSerializer(self.user).data
         return data

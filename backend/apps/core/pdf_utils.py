@@ -13,6 +13,8 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
 from reportlab.graphics.barcode import code128
 
+from apps.core.images import lecteur_image
+
 # Format carte scolaire PVC : CR80 (carte de crédit / badge), 85.6 x 54 mm, paysage
 CARTE_SIZE = (85.6 * mm, 54 * mm)
 
@@ -68,7 +70,7 @@ def generer_carte_scolaire_pdf(eleve, inscription, etablissement, qr_data=""):
     logo_dessine = False
     if getattr(etablissement, "logo", None):
         try:
-            img = ImageReader(etablissement.logo.path)
+            img = lecteur_image(etablissement, "logo")
             c.saveState()
             chemin_clip = c.beginPath()
             chemin_clip.circle(logo_cx, logo_cy, logo_r - 0.3 * mm)
@@ -227,7 +229,7 @@ def generer_carte_scolaire_pdf(eleve, inscription, etablissement, qr_data=""):
     sign_x = 4 * mm
     if getattr(etablissement, "directeur_signature", None):
         try:
-            img = ImageReader(etablissement.directeur_signature.path)
+            img = lecteur_image(etablissement, "directeur_signature")
             c.drawImage(img, sign_x, 5.6 * mm, width=13 * mm, height=5.5 * mm,
                         preserveAspectRatio=True, anchor="sw", mask="auto")
         except Exception:
@@ -239,7 +241,7 @@ def generer_carte_scolaire_pdf(eleve, inscription, etablissement, qr_data=""):
     # Cachet de l'établissement
     if getattr(etablissement, "cachet", None):
         try:
-            img = ImageReader(etablissement.cachet.path)
+            img = lecteur_image(etablissement, "cachet")
             c.drawImage(img, sign_x + 15 * mm, 3.2 * mm, width=9 * mm, height=9 * mm,
                         preserveAspectRatio=True, anchor="sw", mask="auto")
         except Exception:
@@ -379,7 +381,7 @@ def generer_bulletin_pdf(eleve, inscription, periode, lignes_notes, moyenne_gene
     logo_dessine = False
     if getattr(etablissement, "logo", None):
         try:
-            img = ImageReader(etablissement.logo.path)
+            img = lecteur_image(etablissement, "logo")
             c.saveState()
             chemin = c.beginPath()
             chemin.circle(logo_cx, logo_cy, logo_r - 0.6 * mm)
@@ -628,14 +630,14 @@ def generer_bulletin_pdf(eleve, inscription, periode, lignes_notes, moyenne_gene
     c.drawString(marge, y, "Le Directeur")
     if getattr(etablissement, "directeur_signature", None):
         try:
-            img = ImageReader(etablissement.directeur_signature.path)
+            img = lecteur_image(etablissement, "directeur_signature")
             c.drawImage(img, marge, y - 17 * mm, width=26 * mm, height=13 * mm,
                         preserveAspectRatio=True, anchor="sw", mask="auto")
         except Exception:
             pass
     if getattr(etablissement, "cachet", None):
         try:
-            img = ImageReader(etablissement.cachet.path)
+            img = lecteur_image(etablissement, "cachet")
             c.drawImage(img, marge + 25 * mm, y - 20 * mm, width=16 * mm, height=16 * mm,
                         preserveAspectRatio=True, anchor="sw", mask="auto")
         except Exception:
@@ -696,7 +698,7 @@ def generer_bulletin_pdf_a5(eleve, inscription, periode, lignes_notes, moyenne_g
     logo_dessine = False
     if getattr(etablissement, "logo", None):
         try:
-            img = ImageReader(etablissement.logo.path)
+            img = lecteur_image(etablissement, "logo")
             c.saveState()
             chemin = c.beginPath()
             chemin.circle(logo_cx, logo_cy, logo_r - 0.5 * mm)
@@ -905,7 +907,7 @@ def generer_bulletin_pdf_a5(eleve, inscription, periode, lignes_notes, moyenne_g
     c.drawString(marge, y, "Le Directeur")
     if getattr(etablissement, "directeur_signature", None):
         try:
-            img = ImageReader(etablissement.directeur_signature.path)
+            img = lecteur_image(etablissement, "directeur_signature")
             c.drawImage(img, marge, y - 9 * mm, width=16 * mm, height=8 * mm,
                         preserveAspectRatio=True, anchor="sw", mask="auto")
         except Exception:
@@ -944,7 +946,7 @@ def _dessiner_logo_etablissement(c, cx, cy, r, etablissement):
     c.circle(cx, cy, r, fill=0, stroke=1)
     if getattr(etablissement, "logo", None):
         try:
-            img = ImageReader(etablissement.logo.path)
+            img = lecteur_image(etablissement, "logo")
             c.saveState()
             chemin = c.beginPath()
             chemin.circle(cx, cy, r - 0.6 * mm)
@@ -1184,6 +1186,86 @@ def _dessiner_tableau(c, x0, x1, y, tableau):
     return y
 
 
+_ROUGE_ARRETES = colors.HexColor("#9f1239")
+
+
+def _dessiner_logo_carre(c, x, y, taille, etablissement):
+    """Logo dans un carré (coin bas-gauche x, y), proportions conservées ; initiales à défaut."""
+    try:
+        c.drawImage(lecteur_image(etablissement, "logo"), x, y, width=taille, height=taille,
+                    preserveAspectRatio=True, anchor="c", mask="auto")
+        return
+    except Exception:
+        pass
+    c.setFillColor(_BLEU_BULLETIN)
+    c.roundRect(x, y, taille, taille, taille * 0.2, fill=1, stroke=0)
+    c.setFillColor(colors.white)
+    initiales = (etablissement.sigle or etablissement.nom or "?")[:4].upper()
+    taille_police = _police_ajustee(c, initiales, "Helvetica-Bold", taille * 0.36, taille * 0.8, taille_min=6)
+    c.setFont("Helvetica-Bold", taille_police)
+    c.drawCentredString(x + taille / 2, y + taille / 2 - taille_police * 0.35, initiales)
+
+
+def _dessiner_entete_document(c, largeur, x_gauche, x_droite, y_haut, etablissement, taille_logo=26 * mm):
+    """En-tête des documents administratifs : logo à gauche ; nom, devise, coordonnées et arrêtés
+    centrés sur la page ; double filet or/bleu. Retourne l'ordonnée sous l'en-tête."""
+    _dessiner_logo_carre(c, x_gauche, y_haut - taille_logo, taille_logo, etablissement)
+
+    # Bloc texte centré sur la page, sans empiéter sur le logo (marge symétrique à droite)
+    centre = largeur / 2
+    largeur_texte = 2 * min(centre - (x_gauche + taille_logo + 4 * mm), (x_droite - 4 * mm) - centre)
+    y = y_haut - 6.5 * mm
+
+    nom = (etablissement.nom or "").upper()
+    # Une seule ligne si le nom tient en 13 pt minimum, sinon deux lignes
+    taille_nom = _police_ajustee(c, nom, "Helvetica-Bold", 17, largeur_texte, taille_min=13)
+    if c.stringWidth(nom, "Helvetica-Bold", taille_nom) <= largeur_texte:
+        lignes_nom = [nom]
+    else:
+        taille_nom = 15
+        lignes_nom = _decouper_texte(c, nom, "Helvetica-Bold", taille_nom, largeur_texte)
+    c.setFillColor(_BLEU_BULLETIN)
+    for ligne in lignes_nom[:2]:
+        c.setFont("Helvetica-Bold", _police_ajustee(c, ligne, "Helvetica-Bold", taille_nom, largeur_texte, taille_min=9))
+        c.drawCentredString(centre, y, ligne)
+        y -= taille_nom * 0.42 * mm
+
+    if etablissement.devise:
+        c.setFillColor(_OR_BULLETIN)
+        c.setFont("Helvetica-BoldOblique", 8.5)
+        c.drawCentredString(centre, y, _texte_tronque(c, etablissement.devise, "Helvetica-BoldOblique", 8.5, largeur_texte))
+        y -= 4.4 * mm
+
+    coordonnees = "  ·  ".join(p for p in [
+        ", ".join(q for q in (etablissement.adresse, etablissement.ville) if q),
+        f"Tél : {etablissement.telephone}" if etablissement.telephone else "",
+        etablissement.email,
+    ] if p)
+    if coordonnees:
+        c.setFillColor(_GRIS_BULLETIN)
+        c.setFont("Helvetica", 8.5)
+        c.drawCentredString(centre, y, _texte_tronque(c, coordonnees, "Helvetica", 8.5, largeur_texte))
+        y -= 4.4 * mm
+
+    arretes = " / ".join(p for p in [
+        f"ARRÊTÉ DE CRÉATION N° {etablissement.arrete_creation}" if etablissement.arrete_creation else "",
+        f"ARRÊTÉ D'OUVERTURE N° {etablissement.arrete_ouverture}" if etablissement.arrete_ouverture else "",
+    ] if p)
+    if arretes:
+        c.setFillColor(_ROUGE_ARRETES)
+        taille_arr = _police_ajustee(c, arretes, "Helvetica-Bold", 7.5, largeur_texte, taille_min=5.5)
+        c.setFont("Helvetica-Bold", taille_arr)
+        c.drawCentredString(centre, y, arretes)
+        y -= 4 * mm
+
+    bas = min(y, y_haut - taille_logo) - 2.5 * mm
+    c.setFillColor(_OR_BULLETIN)
+    c.rect(x_gauche, bas, x_droite - x_gauche, 1.1 * mm, fill=1, stroke=0)
+    c.setFillColor(_BLEU_BULLETIN)
+    c.rect(x_gauche, bas - 1.6 * mm, x_droite - x_gauche, 0.35 * mm, fill=1, stroke=0)
+    return bas - 1.6 * mm
+
+
 def generer_document_administratif_pdf(titre, etablissement, contenu_lignes, destinataire="", reference="",
                                         signataire_titre="", style="simple", preambule_lignes=None, tableau=None):
     """Génère un document administratif générique en A4 : certificat, attestation, convocation,
@@ -1209,59 +1291,15 @@ def generer_document_administratif_pdf(titre, etablissement, contenu_lignes, des
         _dessiner_cadre_ornemental(c, largeur, hauteur)
 
     if style == "officiel" and (etablissement.pays or "").strip().lower() == "mali":
-        y = _dessiner_entete_officiel_mali(c, largeur, marge, hauteur - marge, etablissement)
-        logo_r = 9 * mm
-        logo_cx, logo_cy = marge + logo_r, y - logo_r
-        _dessiner_logo_etablissement(c, logo_cx, logo_cy, logo_r, etablissement)
-        texte_x = marge + 2 * logo_r + 6 * mm
-        largeur_dispo = largeur - marge - texte_x
-        c.setFillColor(_BLEU_BULLETIN)
-        nom_etab = (etablissement.nom or "").upper()
-        taille_nom = _police_ajustee(c, nom_etab, "Helvetica-Bold", 12, largeur_dispo, taille_min=8)
-        c.setFont("Helvetica-Bold", taille_nom)
-        c.drawString(texte_x, y - 4.5 * mm, _texte_tronque(c, nom_etab, "Helvetica-Bold", taille_nom, largeur_dispo))
-        c.setFillColor(_GRIS_BULLETIN)
-        c.setFont("Helvetica", 8)
-        coordonnees = " · ".join(p for p in [etablissement.adresse, etablissement.telephone, etablissement.email] if p)
-        if coordonnees:
-            c.drawString(texte_x, y - 9 * mm, _texte_tronque(c, coordonnees, "Helvetica", 8, largeur_dispo))
-        y -= (2 * logo_r + 8 * mm)
-        c.setFillColor(_OR_BULLETIN)
-        c.rect(marge, y, largeur - 2 * marge, 0.6 * mm, fill=1, stroke=0)
+        # Bandeau institutionnel (Ministère / République) au-dessus de l'en-tête de l'établissement
+        y = _dessiner_entete_officiel_mali(c, largeur, marge, hauteur - marge, etablissement) + 2 * mm
+        y = _dessiner_entete_document(c, largeur, marge, largeur - marge, y, etablissement, taille_logo=24 * mm)
         y -= 12 * mm
     else:
-        # --- En-tête compact (logo + nom), commun aux styles "simple" et "orne" ---
-        logo_r = 11 * mm
-        logo_cx, logo_cy = marge + logo_r, hauteur - marge - logo_r
-        _dessiner_logo_etablissement(c, logo_cx, logo_cy, logo_r, etablissement)
-
-        texte_x = marge + 2 * logo_r + 6 * mm
-        largeur_dispo = largeur - marge - texte_x
-        c.setFillColor(_BLEU_BULLETIN)
-        nom_etab = (etablissement.nom or "").upper()
-        taille_nom = _police_ajustee(c, nom_etab, "Helvetica-Bold", 14, largeur_dispo, taille_min=9)
-        c.setFont("Helvetica-Bold", taille_nom)
-        c.drawString(texte_x, hauteur - marge - 5 * mm, _texte_tronque(c, nom_etab, "Helvetica-Bold", taille_nom, largeur_dispo))
-
-        c.setFillColor(_GRIS_BULLETIN)
-        c.setFont("Helvetica", 9)
-        coordonnees = " - ".join(p for p in [etablissement.adresse, etablissement.telephone] if p)
-        if coordonnees:
-            c.drawString(texte_x, hauteur - marge - 10.5 * mm, _texte_tronque(c, coordonnees, "Helvetica", 9, largeur_dispo))
-
-        arretes = " / ".join(p for p in [
-            f"Arrêté de création {etablissement.arrete_creation}" if getattr(etablissement, "arrete_creation", "") else "",
-            f"Arrêté d'ouverture {etablissement.arrete_ouverture}" if getattr(etablissement, "arrete_ouverture", "") else "",
-        ] if p)
-        if arretes:
-            c.setFont("Helvetica-Oblique", 7)
-            c.drawString(texte_x, hauteur - marge - 15 * mm, _texte_tronque(c, arretes, "Helvetica-Oblique", 7, largeur_dispo))
-
-        c.setFillColor(_OR_BULLETIN)
-        c.rect(marge if style == "orne" else 0, hauteur - marge - 20 * mm, (largeur - 2 * marge) if style == "orne" else largeur,
-               1 * mm, fill=1, stroke=0)
-
-        y = hauteur - marge - 30 * mm
+        # En-tête commun : sur le cadre orné, il commence sous la bordure (coins décoratifs)
+        haut = hauteur - (14 * mm if style == "orne" else marge)
+        y = _dessiner_entete_document(c, largeur, marge, largeur - marge, haut, etablissement)
+        y -= 9 * mm if style == "orne" else 12 * mm
 
     from datetime import date
 
@@ -1340,7 +1378,7 @@ def generer_document_administratif_pdf(titre, etablissement, contenu_lignes, des
         pied_y = max(y - 4 * mm, marge + 22 * mm)
         if getattr(etablissement, "directeur_signature", None):
             try:
-                c.drawImage(ImageReader(etablissement.directeur_signature.path), marge + 2 * mm, pied_y + 2 * mm,
+                c.drawImage(lecteur_image(etablissement, "directeur_signature"), marge + 2 * mm, pied_y + 2 * mm,
                             width=28 * mm, height=14 * mm, preserveAspectRatio=True, anchor="sw", mask="auto")
             except Exception:
                 pass
@@ -1356,7 +1394,12 @@ def generer_document_administratif_pdf(titre, etablissement, contenu_lignes, des
             c.setFont("Helvetica", 8)
             c.drawString(marge + 2 * mm, pied_y - 9 * mm, etablissement.directeur_nom)
 
-        _dessiner_sceau(c, largeur / 2, pied_y + 2 * mm, 9 * mm, etablissement.sigle)
+        try:
+            taille_cachet = 26 * mm
+            c.drawImage(lecteur_image(etablissement, "cachet"), largeur / 2 - taille_cachet / 2, pied_y - 10 * mm,
+                        width=taille_cachet, height=taille_cachet, preserveAspectRatio=True, anchor="c", mask="auto")
+        except Exception:
+            _dessiner_sceau(c, largeur / 2, pied_y + 2 * mm, 9 * mm, etablissement.sigle)
 
         try:
             qr_buffer = io.BytesIO()
@@ -1433,13 +1476,18 @@ def generer_document_administratif_pdf(titre, etablissement, contenu_lignes, des
     if titre_signataire == (getattr(etablissement, "directeur_titre", "") or "Le Directeur"):
         if getattr(etablissement, "directeur_signature", None):
             try:
-                c.drawImage(ImageReader(etablissement.directeur_signature.path), largeur - marge - 32 * mm, y - 20 * mm,
+                c.drawImage(lecteur_image(etablissement, "directeur_signature"), largeur - marge - 32 * mm, y - 20 * mm,
                             width=32 * mm, height=18 * mm, preserveAspectRatio=True, anchor="sw", mask="auto")
             except Exception:
                 pass
         if etablissement.directeur_nom:
             c.setFont("Helvetica", 9)
             c.drawRightString(largeur - marge, y - 22 * mm, etablissement.directeur_nom)
+        try:
+            c.drawImage(lecteur_image(etablissement, "cachet"), largeur - marge - 68 * mm, y - 26 * mm,
+                        width=30 * mm, height=30 * mm, preserveAspectRatio=True, anchor="c", mask="auto")
+        except Exception:
+            pass
 
     c.showPage()
     c.save()

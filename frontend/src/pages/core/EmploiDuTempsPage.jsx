@@ -81,7 +81,7 @@ function buildPrintDocument({ etablissement, anneeLibelle, title, creneaux, show
     : `<tr><td colspan="${days.length + 1}" class="vide">Aucun cours planifié</td></tr>`;
 
   const e = etablissement || {};
-  const logo = absoluteMediaUrl(e.logo);
+  const logo = e.logo_url || absoluteMediaUrl(e.logo);
   const infos = [e.adresse, e.ville, e.pays].filter(Boolean).join(", ");
   const contacts = [e.telephone && `Tél : ${e.telephone}`, e.email].filter(Boolean).join(" — ");
 

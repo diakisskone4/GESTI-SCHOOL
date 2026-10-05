@@ -2,6 +2,8 @@ import uuid
 from django.contrib.auth.base_user import BaseUserManager
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.db.models import Q
+from django.db.models.functions import Lower
 
 
 class UserManager(BaseUserManager):
@@ -69,6 +71,11 @@ class User(AbstractUser):
         ordering = ["last_name", "first_name"]
         verbose_name = "Utilisateur"
         verbose_name_plural = "Utilisateurs"
+        constraints = [
+            # Dernier rempart contre les doublons (les formulaires vérifient avant, avec un message clair)
+            models.UniqueConstraint(Lower("email"), name="utilisateur_email_unique_insensible_casse"),
+            models.UniqueConstraint(fields=["telephone"], condition=~Q(telephone=""), name="utilisateur_telephone_unique"),
+        ]
 
     def get_full_name(self):
         full = super().get_full_name().strip()
@@ -90,6 +97,9 @@ class User(AbstractUser):
         return f"{self.get_full_name()} ({self.get_role_display()})"
 
     def save(self, *args, **kwargs):
+        from apps.accounts.doublons import nettoyer_telephone
+
+        self.telephone = nettoyer_telephone(self.telephone)
         if not self.username:
             self.username = self.email
         super().save(*args, **kwargs)

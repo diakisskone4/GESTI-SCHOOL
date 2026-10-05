@@ -3,6 +3,7 @@ import AdminDashboard from "./AdminDashboard";
 import TeacherDashboard from "./TeacherDashboard";
 import StudentParentDashboard from "./StudentParentDashboard";
 import SurveillantDashboard from "./SurveillantDashboard";
+import ComptableDashboard from "./ComptableDashboard";
 
 /** Affiche le tableau de bord adapté au rôle de l'utilisateur connecté. */
 export default function DashboardRouter() {
@@ -10,6 +11,7 @@ export default function DashboardRouter() {
 
   if (user?.role === "enseignant") return <TeacherDashboard />;
   if (user?.role === "surveillant") return <SurveillantDashboard />;
+  if (user?.role === "comptable") return <ComptableDashboard />;
   if (user?.role === "eleve" || user?.role === "parent") return <StudentParentDashboard />;
   return <AdminDashboard />;
 }

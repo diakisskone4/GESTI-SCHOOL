@@ -95,13 +95,16 @@ class FactureFrais(TimeStampedModel):
 
     @property
     def montant_paye(self):
-        return sum(p.montant for p in self.paiements.all())
+        """Total des paiements valides (les paiements annulés ne comptent pas)."""
+        return sum(p.montant for p in self.paiements.all() if not p.annule)
 
     @property
     def solde(self):
         return self.montant_net - self.montant_paye
 
     def maj_statut(self):
+        if self.statut == "annulee":
+            return
         solde = self.solde
         if solde <= 0:
             self.statut = "payee"
@@ -153,5 +156,5 @@ class Paiement(TimeStampedModel):
             seq = int(last.numero_recu.split("-")[-1]) + 1 if last else 1
             self.numero_recu = f"REC-{annee}-{seq:06d}"
         super().save(*args, **kwargs)
-        if not self.annule:
-            self.facture.maj_statut()
+        # Recalcul aussi lors d'une annulation : la facture redevient impayée / partielle
+        self.facture.maj_statut()

@@ -26,6 +26,11 @@ from apps.core.serializers import (
     PeriodeSerializer,
     SerieSerializer,
 )
+from django.http import Http404, HttpResponse
+from django.shortcuts import get_object_or_404
+from rest_framework.permissions import AllowAny
+
+from apps.core.images import contenu_image, type_mime
 from apps.core.tenancy import EtablissementScopedMixin, etablissements_accessibles, etablissements_famille_ids
 
 
@@ -43,6 +48,18 @@ class EtablissementViewSet(viewsets.ModelViewSet):
         if user.est_eleve or user.est_parent:
             return Etablissement.objects.filter(pk__in=etablissements_famille_ids(user))
         return etablissements_accessibles(user)
+
+    @action(detail=True, methods=["get"], permission_classes=[AllowAny], authentication_classes=[])
+    def logo(self, request, pk=None):
+        """Logo de l'établissement (public, utilisé dans les balises <img>), depuis le fichier
+        ou, s'il a disparu du disque, depuis la copie en base de données."""
+        etablissement = get_object_or_404(Etablissement, pk=pk)
+        contenu = contenu_image(etablissement, "logo")
+        if not contenu:
+            raise Http404("Aucun logo.")
+        reponse = HttpResponse(contenu, content_type=type_mime(etablissement, "logo"))
+        reponse["Cache-Control"] = "public, max-age=3600"
+        return reponse
 
     def perform_destroy(self, instance):
         from rest_framework.exceptions import ValidationError

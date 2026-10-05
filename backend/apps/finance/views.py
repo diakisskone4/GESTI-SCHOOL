@@ -1,6 +1,10 @@
+from datetime import timedelta
+
 from django.core.files.base import ContentFile
 from django.db.models import Sum
+from django.db.models.functions import TruncMonth
 from django.http import FileResponse
+from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -135,11 +139,49 @@ class DashboardFinancierView(viewsets.ViewSet):
         for statut, _ in FactureFrais.STATUT_CHOICES:
             par_statut[statut] = factures.filter(statut=statut).count()
 
+        paiements = Paiement.objects.filter(facture__in=factures, annule=False)
+        aujourd_hui = timezone.localdate()
+
+        # Encaissements par mode de paiement
+        par_mode = {
+            ligne["mode_paiement"]: float(ligne["total"])
+            for ligne in paiements.values("mode_paiement").annotate(total=Sum("montant"))
+        }
+        libelles_modes = dict(Paiement.MODE_CHOICES)
+
+        # Encaissements des 6 derniers mois (y compris le mois en cours)
+        debut = (aujourd_hui.replace(day=1) - timedelta(days=150)).replace(day=1)
+        par_mois = {
+            ligne["mois"].strftime("%Y-%m"): float(ligne["total"])
+            for ligne in paiements.filter(date_paiement__gte=debut)
+            .annotate(mois=TruncMonth("date_paiement")).values("mois").annotate(total=Sum("montant"))
+        }
+        mois, curseur = [], debut
+        while curseur <= aujourd_hui:
+            cle = curseur.strftime("%Y-%m")
+            mois.append({"mois": cle, "total": par_mois.get(cle, 0.0)})
+            curseur = (curseur + timedelta(days=32)).replace(day=1)
+
+        # Factures en retard (échéance dépassée, pas encore soldées)
+        en_retard = [f for f in factures.filter(statut__in=["impayee", "partielle"], date_echeance__lt=aujourd_hui)
+                     .prefetch_related("paiements")]
+        net = float(total_facture) - float(total_remise)
+
         return Response({
             "total_facture": float(total_facture),
             "total_remise": float(total_remise),
+            "total_net": net,
             "total_encaisse": float(total_encaisse),
             "total_impaye": max(total_impaye, 0),
+            "taux_recouvrement": round(float(total_encaisse) / net * 100, 1) if net > 0 else 0,
             "nb_factures": factures.count(),
+            "nb_paiements": paiements.count(),
+            "encaisse_aujourdhui": float(paiements.filter(date_paiement=aujourd_hui).aggregate(t=Sum("montant"))["t"] or 0),
+            "nb_factures_en_retard": len(en_retard),
+            "montant_en_retard": float(sum((f.solde for f in en_retard), 0)),
             "repartition_par_statut": par_statut,
+            "encaissements_par_mode": [
+                {"mode": mode, "libelle": libelles_modes.get(mode, mode), "total": total} for mode, total in par_mode.items()
+            ],
+            "encaissements_par_mois": mois,
         })

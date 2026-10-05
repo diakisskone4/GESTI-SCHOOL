@@ -1,10 +1,18 @@
 from rest_framework import serializers
 
+from apps.accounts.doublons import nettoyer_telephone, verifier_employe_unique
+
 from apps.staff.models import Affectation, DocumentPedagogique, Employe, Enseignant, PresenceEmploye
 
 
 class EmployeSerializer(serializers.ModelSerializer):
     nom_complet = serializers.SerializerMethodField()
+
+    def validate(self, attrs):
+        if "telephone" in attrs:
+            attrs["telephone"] = nettoyer_telephone(attrs["telephone"])
+        verifier_employe_unique(self.Meta.model, attrs, self.instance)
+        return attrs
 
     class Meta:
         model = Employe
@@ -18,6 +26,12 @@ class EmployeSerializer(serializers.ModelSerializer):
 class EnseignantSerializer(serializers.ModelSerializer):
     nom_complet = serializers.SerializerMethodField()
     matieres_enseignees_noms = serializers.StringRelatedField(source="matieres_enseignees", many=True, read_only=True)
+
+    def validate(self, attrs):
+        if "telephone" in attrs:
+            attrs["telephone"] = nettoyer_telephone(attrs["telephone"])
+        verifier_employe_unique(self.Meta.model, attrs, self.instance)
+        return attrs
 
     class Meta:
         model = Enseignant

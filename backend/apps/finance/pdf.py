@@ -14,6 +14,7 @@ from reportlab.lib.units import mm
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen import canvas
 
+from apps.core.images import lecteur_image
 from apps.core.pdf_utils import _decouper_texte
 
 PRIMAIRE = colors.HexColor("#5f34dd")
@@ -97,19 +98,17 @@ def montant_en_lettres(montant):
 # ---------------------------------------------------------------------------
 # Éléments communs
 # ---------------------------------------------------------------------------
-def _image(champ):
-    """ImageReader d'un champ ImageField, ou None s'il est vide / illisible."""
-    if not champ:
-        return None
+def _image(etablissement, champ):
+    """ImageReader d'une image de l'établissement (fichier ou copie en base), ou None."""
     try:
-        return ImageReader(champ.path)
-    except Exception:
+        return lecteur_image(etablissement, champ)
+    except ValueError:
         return None
 
 
 def _dessiner_logo(c, x, y, taille, etablissement):
     """Logo de l'établissement dans un carré (coin bas-gauche en x, y), ou ses initiales à défaut."""
-    logo = _image(getattr(etablissement, "logo", None))
+    logo = _image(etablissement, "logo")
     if logo:
         c.drawImage(logo, x, y, width=taille, height=taille, preserveAspectRatio=True, anchor="c", mask="auto")
         return
@@ -229,7 +228,7 @@ def _signature(c, x_centre, y, etablissement, titre, largeur):
     c.setFillColor(TEXTE)
     c.setFont("Helvetica-Bold", 8.5)
     c.drawCentredString(x_centre, y, titre)
-    cachet = _image(getattr(etablissement, "cachet", None))
+    cachet = _image(etablissement, "cachet")
     if cachet:
         taille = 24 * mm
         c.drawImage(cachet, x_centre - taille / 2, y - taille - 2 * mm, width=taille, height=taille,

@@ -70,7 +70,7 @@ export default function EtablissementSwitcher({ variante = "barre" }) {
             }`}
           >
             <span className={`flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-lg ${estActif ? "bg-white" : "bg-slate-100"}`}>
-              {etab.logo ? <img src={etab.logo} alt="" className="h-full w-full object-contain" /> : <School size={16} />}
+              {etab.logo_url ? <img src={etab.logo_url} alt="" className="h-full w-full object-contain" /> : <School size={16} />}
             </span>
             <span className="min-w-0 flex-1">
               <span className="block truncate font-semibold">{etab.nom}</span>

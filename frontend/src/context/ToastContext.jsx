@@ -47,12 +47,22 @@ export function useToast() {
 }
 
 /** Extrait un message d'erreur lisible depuis une réponse Axios/DRF. */
+// Libellés lisibles des champs renvoyés par l'API dans les messages d'erreur
+const LIBELLES_CHAMPS = {
+  email: "Email", telephone: "Téléphone", matricule: "Matricule", classe: "Classe", nom: "Nom",
+  prenom: "Prénom", first_name: "Prénom", last_name: "Nom", date_naissance: "Date de naissance",
+  password: "Mot de passe", password_confirm: "Confirmation", sexe: "Sexe", role: "Rôle",
+  etablissement: "Établissement", etablissement_courant: "Établissement",
+};
+
 export function extractErrorMessage(error) {
   const data = error?.response?.data;
   if (!data) return error?.message || "Une erreur est survenue.";
   if (typeof data === "string") return data;
   if (data.detail) return data.detail;
   const firstKey = Object.keys(data)[0];
-  const firstVal = data[firstKey];
-  return Array.isArray(firstVal) ? `${firstKey}: ${firstVal[0]}` : String(firstVal);
+  const firstVal = Array.isArray(data[firstKey]) ? data[firstKey][0] : data[firstKey];
+  const message = typeof firstVal === "object" && firstVal !== null ? Object.values(firstVal).flat()[0] : firstVal;
+  if (firstKey === "non_field_errors") return String(message);
+  return `${LIBELLES_CHAMPS[firstKey] || firstKey} : ${message}`;
 }

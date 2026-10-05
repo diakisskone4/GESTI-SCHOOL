@@ -2,6 +2,7 @@ import uuid
 import datetime
 from django.conf import settings
 from django.db import models
+from django.db.models.functions import Lower
 
 from apps.core.models import TimeStampedModel
 
@@ -35,6 +36,12 @@ class Eleve(TimeStampedModel):
         ordering = ["nom", "prenom"]
         verbose_name = "Élève"
         verbose_name_plural = "Élèves"
+        constraints = [
+            models.UniqueConstraint(
+                Lower("nom"), Lower("prenom"), "date_naissance", "etablissement",
+                name="eleve_unique_par_etablissement",
+            ),
+        ]
 
     def __str__(self):
         return f"{self.prenom} {self.nom} ({self.matricule})"

@@ -41,6 +41,8 @@ class Etablissement(TimeStampedModel):
     cachet = models.ImageField(upload_to="etablissements/cachets/", blank=True, null=True)
     actif = models.BooleanField(default=True)
 
+    IMAGES = ("logo", "cachet", "directeur_signature")
+
     class Meta:
         ordering = ["nom"]
         verbose_name = "Établissement"
@@ -48,6 +50,53 @@ class Etablissement(TimeStampedModel):
 
     def __str__(self):
         return self.nom
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        self.sauvegarder_images()
+
+    def sauvegarder_images(self):
+        """Copie le logo, le cachet et la signature dans la base de données.
+
+        Sur les hébergements sans disque persistant (Render gratuit...), les fichiers envoyés
+        disparaissent à chaque redéploiement ; la copie en base permet de toujours les retrouver
+        (voir apps/core/images.py)."""
+        for champ in self.IMAGES:
+            fichier = getattr(self, champ)
+            stockee = self.images_stockees.filter(champ=champ).first()
+            if not fichier:
+                if stockee:
+                    stockee.delete()
+                continue
+            if stockee and stockee.nom_fichier == fichier.name:
+                continue
+            try:
+                fichier.open("rb")
+                contenu = fichier.read()
+                fichier.close()
+            except (OSError, ValueError):
+                continue
+            ImageEtablissement.objects.update_or_create(
+                etablissement=self, champ=champ,
+                defaults={"nom_fichier": fichier.name, "contenu": contenu},
+            )
+
+
+class ImageEtablissement(models.Model):
+    """Copie en base de données d'une image de l'établissement (logo, cachet, signature)."""
+    etablissement = models.ForeignKey(Etablissement, on_delete=models.CASCADE, related_name="images_stockees")
+    champ = models.CharField(max_length=30)
+    nom_fichier = models.CharField(max_length=255)
+    contenu = models.BinaryField()
+    modifie_le = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ("etablissement", "champ")
+        verbose_name = "Image d'établissement (copie)"
+        verbose_name_plural = "Images d'établissement (copies)"
+
+    def __str__(self):
+        return f"{self.etablissement} - {self.champ}"
 
 
 class AnneeScolaire(TimeStampedModel):

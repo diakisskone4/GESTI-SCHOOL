@@ -238,7 +238,7 @@ Chaque établissement a ses propres données (années, classes, élèves, financ
             render: (r) => (
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white">
-                  {r.logo ? <img src={r.logo} alt="" className="h-full w-full object-contain" /> : <School size={18} className="text-slate-300" />}
+                  {r.logo_url ? <img src={r.logo_url} alt="" className="h-full w-full object-contain" /> : <School size={18} className="text-slate-300" />}
                 </div>
                 <div>
                   <div className="font-semibold text-slate-800">{r.nom}</div>
@@ -362,7 +362,7 @@ Chaque établissement a ses propres données (années, classes, élèves, financ
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <ImageField
                 label="Logo"
-                current={editing?.logo}
+                current={editing?.logo_url}
                 file={files.logo}
                 removed={removed.logo}
                 onSelect={(f) => selectImage("logo", f)}

@@ -14,9 +14,19 @@ from apps.core.models import (
 
 
 class EtablissementSerializer(serializers.ModelSerializer):
+    # Adresse du logo toujours disponible (fichier ou copie en base) : à utiliser pour l'affichage
+    logo_url = serializers.SerializerMethodField()
+
     class Meta:
         model = Etablissement
         fields = "__all__"
+
+    def get_logo_url(self, obj):
+        if not obj.logo:
+            return None
+        url = f"/api/v1/etablissements/{obj.pk}/logo/?v={obj.updated_at:%Y%m%d%H%M%S}"
+        request = self.context.get("request")
+        return request.build_absolute_uri(url) if request else url
 
 
 class AnneeScolaireSerializer(serializers.ModelSerializer):
