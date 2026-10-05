@@ -16,9 +16,11 @@ from apps.students.serializers import (
     InscriptionSerializer,
     SanctionRecompenseSerializer,
 )
+from apps.core.tenancy import EtablissementScopedMixin, etablissement_actif_id
 
 
-class EleveViewSet(viewsets.ModelViewSet):
+class EleveViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
+    etablissement_field = "etablissement"
     queryset = Eleve.objects.select_related("etablissement", "user")
     serializer_class = EleveSerializer
     permission_classes = [IsAdminOrReadOnly]
@@ -53,7 +55,9 @@ class EleveViewSet(viewsets.ModelViewSet):
         return Response({"eleve": EleveSerializer(eleve).data, "parcours": data})
 
 
-class InscriptionViewSet(viewsets.ModelViewSet):
+class InscriptionViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
+    etablissement_field = "eleve__etablissement"
+    etablissement_coherence = ("eleve__etablissement", "classe__etablissement")
     serializer_class = InscriptionSerializer
     filterset_fields = ["classe", "annee_scolaire", "statut", "type_inscription", "boursier", "redoublant", "eleve"]
     search_fields = ["eleve__nom", "eleve__prenom", "eleve__matricule"]
@@ -98,7 +102,8 @@ def _verifier_inscription_accessible(user, inscription):
         raise PermissionDenied("Cet élève n'appartient pas à votre établissement.")
 
 
-class AbsenceViewSet(viewsets.ModelViewSet):
+class AbsenceViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
+    etablissement_field = "inscription__eleve__etablissement"
     serializer_class = AbsenceSerializer
     filterset_fields = ["inscription", "type_evenement", "justifiee", "date"]
 
@@ -122,7 +127,8 @@ class AbsenceViewSet(viewsets.ModelViewSet):
         serializer.save()
 
 
-class SanctionRecompenseViewSet(viewsets.ModelViewSet):
+class SanctionRecompenseViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
+    etablissement_field = "inscription__eleve__etablissement"
     serializer_class = SanctionRecompenseSerializer
     permission_classes = [IsAdminOuSurveillant]
     filterset_fields = ["inscription", "nature", "periode"]
@@ -142,7 +148,8 @@ class SanctionRecompenseViewSet(viewsets.ModelViewSet):
         serializer.save()
 
 
-class CarteScolaireViewSet(viewsets.ModelViewSet):
+class CarteScolaireViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
+    etablissement_field = "inscription__eleve__etablissement"
     serializer_class = CarteScolaireSerializer
     filterset_fields = ["inscription"]
 
@@ -174,18 +181,25 @@ class CarteScolaireViewSet(viewsets.ModelViewSet):
         """Crée (si besoin) et génère la carte scolaire pour une inscription donnée."""
         inscription_id = request.data.get("inscription")
         try:
-            inscription = Inscription.objects.select_related("eleve", "classe", "annee_scolaire").get(pk=inscription_id)
+            inscription = Inscription.objects.select_related("eleve", "classe", "annee_scolaire").filter(
+                **self._filtre_actif("eleve__etablissement_id")
+            ).get(pk=inscription_id)
         except Inscription.DoesNotExist:
             return Response({"detail": "Inscription introuvable."}, status=404)
         carte, _ = CarteScolaire.objects.get_or_create(inscription=inscription)
         return Response(CarteScolaireSerializer(carte).data, status=201)
+
+    def _filtre_actif(self, champ):
+        """Filtre {champ: établissement actif} (vide pour un super administrateur sans établissement)."""
+        actif = etablissement_actif_id(self.request.user)
+        return {} if actif is None else {champ: actif}
 
     @action(detail=False, methods=["post"])
     def generer_pour_eleve(self, request):
         """Crée ou retrouve la carte scolaire pour le profil élève donné."""
         eleve_id = request.data.get("eleve")
         try:
-            eleve = Eleve.objects.get(pk=eleve_id)
+            eleve = Eleve.objects.filter(**self._filtre_actif("etablissement_id")).get(pk=eleve_id)
         except Eleve.DoesNotExist:
             return Response({"detail": "Élève introuvable."}, status=404)
 
@@ -200,7 +214,9 @@ class CarteScolaireViewSet(viewsets.ModelViewSet):
     def generer_pour_classe(self, request):
         """Génère les cartes scolaires pour tous les élèves inscrits dans une classe."""
         classe_id = request.data.get("classe")
-        inscriptions = Inscription.objects.filter(classe_id=classe_id, statut="active").select_related("eleve", "classe", "annee_scolaire")
+        inscriptions = Inscription.objects.filter(
+            classe_id=classe_id, statut="active", **self._filtre_actif("classe__etablissement_id")
+        ).select_related("eleve", "classe", "annee_scolaire")
         if not inscriptions.exists():
             return Response({"detail": "Aucun élève inscrit actif dans cette classe."}, status=400)
 

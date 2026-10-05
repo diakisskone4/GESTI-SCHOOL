@@ -3,6 +3,7 @@ import { ChevronDown, ChevronLeft, GraduationCap, LogOut, Search, Settings, User
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth, ROLE_LABELS } from "../../context/AuthContext";
 import NotificationBell from "./NotificationBell";
+import EtablissementSwitcher from "./EtablissementSwitcher";
 import { infosPage } from "./navConfig";
 
 export default function Topbar() {
@@ -36,6 +37,7 @@ export default function Topbar() {
       </div>
 
       <div className="hidden items-center gap-3 lg:flex">
+        <EtablissementSwitcher />
         <div className="flex w-72 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-400">
           <Search size={16} />
           <input

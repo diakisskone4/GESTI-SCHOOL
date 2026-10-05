@@ -9,6 +9,7 @@ from rest_framework.response import Response
 from apps.communication.models import Annonce, Message, Notification
 from apps.communication.serializers import AnnonceSerializer, MessageSerializer, NotificationSerializer
 from apps.core.permissions import IsAdminOrReadOnly
+from apps.core.tenancy import EtablissementScopedMixin, etablissement_actif_id, etablissements_famille_ids
 
 User = get_user_model()
 
@@ -31,8 +32,11 @@ class MessageViewSet(viewsets.ModelViewSet):
         """Retourne les utilisateurs du même établissement avec vraies données (nom, rôle, email)."""
         user = request.user
         queryset = User.objects.filter(is_active=True).exclude(pk=user.pk).select_related("profil_employe", "profil_eleve")
-        if not user.est_admin and user.etablissement_courant_id:
-            queryset = queryset.filter(etablissements=user.etablissement_courant_id)
+        actif = etablissement_actif_id(user)
+        if actif is not None:
+            queryset = queryset.filter(etablissements=actif)
+        elif user.est_eleve or user.est_parent:
+            queryset = queryset.filter(etablissements__in=etablissements_famille_ids(user)).distinct()
         queryset = queryset.order_by("last_name", "first_name", "email")
         
         results = []
@@ -64,8 +68,9 @@ class MessageViewSet(viewsets.ModelViewSet):
         return Response({"non_lus": count})
 
 
-class AnnonceViewSet(viewsets.ModelViewSet):
+class AnnonceViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
     """Annonces : les enseignants publient pour leurs classes, l'admin pour tout l'établissement."""
+    etablissement_field = "etablissement"
     queryset = Annonce.objects.select_related("auteur", "classe", "etablissement")
     serializer_class = AnnonceSerializer
     permission_classes = [IsAdminOrReadOnly]

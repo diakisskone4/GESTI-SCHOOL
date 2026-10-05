@@ -1,8 +1,10 @@
 from django.contrib.auth import get_user_model, password_validation
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import generics, serializers, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -18,6 +20,7 @@ from apps.accounts.serializers import (
 )
 from apps.core.models import JournalActivite
 from apps.core.permissions import IsAdmin
+from apps.core.tenancy import EtablissementScopedMixin, etablissement_actif_id, peut_acceder
 
 User = get_user_model()
 
@@ -113,7 +116,19 @@ class MeView(APIView):
     def get(self, request):
         return Response(UserSerializer(request.user).data)
 
+    # Champs qu'un utilisateur peut modifier lui-même (jamais son rôle, ses accès ou son statut).
+    CHAMPS_MODIFIABLES = {"first_name", "last_name", "telephone", "photo", "langue_preferee", "etablissement_courant"}
+
     def patch(self, request):
+        interdits = set(request.data.keys()) - self.CHAMPS_MODIFIABLES
+        if interdits:
+            return Response(
+                {"detail": f"Champs non modifiables depuis le profil : {', '.join(sorted(interdits))}."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        etablissement = request.data.get("etablissement_courant")
+        if etablissement and not peut_acceder(request.user, etablissement):
+            return Response({"detail": "Vous n'avez pas accès à cet établissement."}, status=status.HTTP_403_FORBIDDEN)
         serializer = UserSerializer(request.user, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
@@ -136,8 +151,19 @@ class ChangePasswordView(APIView):
 
 
 class UserViewSet(viewsets.ModelViewSet):
-    """Gestion des utilisateurs par un administrateur (CRUD complet, tous rôles)."""
+    """Gestion des utilisateurs par un administrateur (CRUD complet, tous rôles),
+    limitée aux comptes de l'établissement actif."""
     queryset = User.objects.all()
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        actif = etablissement_actif_id(self.request.user)
+        if actif is None:
+            return qs
+        # Comptes de l'établissement actif + parents pas encore rattachés à un établissement
+        return qs.filter(
+            Q(etablissements=actif) | Q(role=User.Role.PARENT, etablissements__isnull=True)
+        ).distinct()
     serializer_class = UserSerializer
     permission_classes = [IsAdmin]
     filterset_fields = ["role", "is_active", "etablissement_courant"]
@@ -156,9 +182,26 @@ class UserViewSet(viewsets.ModelViewSet):
         except DjangoValidationError as exc:
             raise serializers.ValidationError({"password": list(exc.messages)})
 
+    def _verifier_etablissements(self, serializer):
+        """Un administrateur ne peut rattacher un compte qu'aux établissements qu'il gère."""
+        demandeur = self.request.user
+        donnees = serializer.validated_data
+        cibles = list(donnees.get("etablissements") or [])
+        if donnees.get("etablissement_courant"):
+            cibles.append(donnees["etablissement_courant"])
+        refuses = [e.nom for e in cibles if not peut_acceder(demandeur, e.pk)]
+        if refuses:
+            raise PermissionDenied(f"Vous ne gérez pas ces établissements : {', '.join(refuses)}.")
+
     def perform_create(self, serializer):
         import secrets
         self._verifier_role(serializer.validated_data.get("role"))
+        self._verifier_etablissements(serializer)
+        if not serializer.validated_data.get("etablissement_courant"):
+            # Par défaut, le nouveau compte appartient à l'établissement actif de l'administrateur
+            actif = etablissement_actif_id(self.request.user)
+            if actif not in (None, -1):
+                serializer.validated_data["etablissement_courant_id"] = actif
         password = self.request.data.get("password")
         if password:
             self._valider_mot_de_passe(password)
@@ -174,6 +217,7 @@ class UserViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         if "role" in serializer.validated_data:
             self._verifier_role(serializer.validated_data["role"])
+        self._verifier_etablissements(serializer)
         password = self.request.data.get("password")
         if password:
             self._valider_mot_de_passe(password, serializer.instance)
@@ -186,7 +230,8 @@ class UserViewSet(viewsets.ModelViewSet):
             user.etablissements.add(user.etablissement_courant)
 
 
-class LienParentEleveViewSet(viewsets.ModelViewSet):
+class LienParentEleveViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
+    etablissement_field = "eleve__etablissement"
     queryset = LienParentEleve.objects.select_related("parent", "eleve")
     serializer_class = LienParentEleveSerializer
     filterset_fields = ["parent", "eleve", "eleve__etablissement", "relation"]
@@ -200,6 +245,14 @@ class LienParentEleveViewSet(viewsets.ModelViewSet):
         if self.action == "mes_enfants":
             return [IsAuthenticated()]
         return [IsAdmin()]
+
+    def perform_create(self, serializer):
+        lien = serializer.save()
+        # Le parent devient visible dans l'établissement de son enfant
+        lien.parent.etablissements.add(lien.eleve.etablissement_id)
+        if not lien.parent.etablissement_courant_id:
+            lien.parent.etablissement_courant_id = lien.eleve.etablissement_id
+            lien.parent.save(update_fields=["etablissement_courant"])
 
     @action(detail=False, methods=["get"])
     def mes_enfants(self, request):

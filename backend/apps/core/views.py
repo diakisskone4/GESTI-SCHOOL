@@ -26,6 +26,7 @@ from apps.core.serializers import (
     PeriodeSerializer,
     SerieSerializer,
 )
+from apps.core.tenancy import EtablissementScopedMixin, etablissements_accessibles, etablissements_famille_ids
 
 
 class EtablissementViewSet(viewsets.ModelViewSet):
@@ -34,6 +35,21 @@ class EtablissementViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAdminOrReadOnly]
     search_fields = ["nom", "sigle", "ville"]
     filterset_fields = ["actif", "type_etablissement"]
+
+    def get_queryset(self):
+        """Personnel : établissements auxquels il a accès (tous pour un super administrateur).
+        Élève / parent : établissement(s) de la famille."""
+        user = self.request.user
+        if user.est_eleve or user.est_parent:
+            return Etablissement.objects.filter(pk__in=etablissements_famille_ids(user))
+        return etablissements_accessibles(user)
+
+    def perform_destroy(self, instance):
+        from rest_framework.exceptions import ValidationError
+
+        if instance.pk == self.request.user.etablissement_courant_id:
+            raise ValidationError({"detail": "Basculez d'abord vers un autre établissement avant de supprimer celui-ci."})
+        instance.delete()
 
     def perform_create(self, serializer):
         """Rattache automatiquement le créateur à l'établissement qu'il vient de créer,
@@ -46,7 +62,8 @@ class EtablissementViewSet(viewsets.ModelViewSet):
             user.save(update_fields=["etablissement_courant"])
 
 
-class AnneeScolaireViewSet(viewsets.ModelViewSet):
+class AnneeScolaireViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
+    etablissement_field = "etablissement"
     queryset = AnneeScolaire.objects.all()
     serializer_class = AnneeScolaireSerializer
     permission_classes = [IsAdminOrReadOnly]
@@ -84,28 +101,33 @@ class AnneeScolaireViewSet(viewsets.ModelViewSet):
         return Response({"detail": f"{len(created)} périodes configurées avec succès pour l'année {annee.libelle}.", "results": created})
 
 
-class PeriodeViewSet(viewsets.ModelViewSet):
+class PeriodeViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
+    etablissement_field = "annee_scolaire__etablissement"
     queryset = Periode.objects.all()
     serializer_class = PeriodeSerializer
     permission_classes = [IsAdminOrReadOnly]
     filterset_fields = ["annee_scolaire", "est_courante", "type_periode", "cloturee"]
 
 
-class NiveauViewSet(viewsets.ModelViewSet):
+class NiveauViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
+    etablissement_field = "etablissement"
     queryset = Niveau.objects.all()
     serializer_class = NiveauSerializer
     permission_classes = [IsAdminOrReadOnly]
     filterset_fields = ["etablissement", "cycle"]
 
 
-class SerieViewSet(viewsets.ModelViewSet):
+class SerieViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
+    etablissement_field = "niveau__etablissement"
     queryset = Serie.objects.all()
     serializer_class = SerieSerializer
     permission_classes = [IsAdminOrReadOnly]
     filterset_fields = ["niveau"]
 
 
-class ClasseViewSet(viewsets.ModelViewSet):
+class ClasseViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
+    etablissement_field = "etablissement"
+    etablissement_coherence = ("etablissement", "niveau__etablissement", "annee_scolaire__etablissement")
     queryset = Classe.objects.select_related("niveau", "serie", "annee_scolaire", "professeur_principal")
     serializer_class = ClasseSerializer
     permission_classes = [IsAdminOrReadOnly]
@@ -113,7 +135,8 @@ class ClasseViewSet(viewsets.ModelViewSet):
     search_fields = ["nom"]
 
 
-class MatiereViewSet(viewsets.ModelViewSet):
+class MatiereViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
+    etablissement_field = "etablissement"
     queryset = Matiere.objects.all()
     serializer_class = MatiereSerializer
     permission_classes = [IsAdminOrReadOnly]
@@ -121,15 +144,18 @@ class MatiereViewSet(viewsets.ModelViewSet):
     search_fields = ["nom", "code"]
 
 
-class CreneauEmploiDuTempsViewSet(viewsets.ModelViewSet):
+class CreneauEmploiDuTempsViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
+    etablissement_field = "classe__etablissement"
+    etablissement_coherence = ("classe__etablissement", "matiere__etablissement")
     queryset = CreneauEmploiDuTemps.objects.select_related("classe", "matiere", "enseignant")
     serializer_class = CreneauEmploiDuTempsSerializer
     permission_classes = [IsAdminOrReadOnly]
     filterset_fields = ["classe", "classe__etablissement", "classe__annee_scolaire", "matiere", "enseignant", "jour", "salle"]
 
 
-class JournalActiviteViewSet(viewsets.ReadOnlyModelViewSet):
+class JournalActiviteViewSet(EtablissementScopedMixin, viewsets.ReadOnlyModelViewSet):
     """Consultation du journal d'audit (lecture seule, admin uniquement)."""
+    etablissement_field = "etablissement"
     queryset = JournalActivite.objects.select_related("utilisateur", "etablissement")
     serializer_class = JournalActiviteSerializer
     permission_classes = [IsAdmin]

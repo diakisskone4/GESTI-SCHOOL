@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { ImagePlus, Loader2, Pencil, Plus, School, Search, Trash2, X } from "lucide-react";
+import { ArrowRightLeft, CheckCircle2, ImagePlus, Loader2, Pencil, Plus, School, Search, Trash2, X } from "lucide-react";
 import PageHeader from "../../components/ui/PageHeader";
 import Modal from "../../components/ui/Modal";
 import DataTable from "../../components/ui/DataTable";
 import { useFetch } from "../../hooks/useFetch";
 import { useToast, extractErrorMessage } from "../../context/ToastContext";
 import { etablissementsApi } from "../../api/endpoints";
+import { useAuth } from "../../context/AuthContext";
+import { basculerVersEtablissement } from "../../components/layout/EtablissementSwitcher";
 
 const TYPES = [
   { value: "prescolaire", label: "Préscolaire" },
@@ -85,6 +87,18 @@ function Section({ title, children }) {
 
 export default function EtablissementsPage() {
   const { notify } = useToast();
+  const { user } = useAuth();
+  const [bascule, setBascule] = useState(null);
+
+  const gerer = async (etab) => {
+    setBascule(etab.id);
+    try {
+      await basculerVersEtablissement(etab.id);
+    } catch (err) {
+      notify(extractErrorMessage(err), "error");
+      setBascule(null);
+    }
+  };
 
   const [search, setSearch] = useState("");
   const { data, loading, reload } = useFetch(
@@ -152,9 +166,21 @@ export default function EtablissementsPage() {
         await etablissementsApi.update(saved.id, Object.fromEntries(toClear.map((f) => [f, null])));
       }
 
-      notify(editing ? "Établissement modifié." : "Établissement créé.", "success");
       setModalOpen(false);
       reload();
+      if (editing) {
+        notify("Établissement modifié.", "success");
+      } else if (window.confirm(
+        `« ${saved.nom} » a été créé.
+
+Chaque établissement a ses propres données (années, classes, élèves, finances...).
+` +
+        "Basculer maintenant vers ce nouvel établissement pour le configurer ?"
+      )) {
+        await gerer(saved);
+      } else {
+        notify("Établissement créé. Utilisez « Gérer » pour basculer vers lui.", "success");
+      }
     } catch (err) {
       notify(extractErrorMessage(err), "error");
     } finally {
@@ -179,7 +205,7 @@ export default function EtablissementsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Établissements"
-        subtitle="Gestion multi-établissements : identité, coordonnées, informations officielles et direction."
+        subtitle="Chaque établissement a ses propres données. « Gérer » bascule l'application vers l'établissement choisi."
         actions={
           <button onClick={openCreate} className="btn-primary">
             <Plus size={16} /> Ajouter un établissement
@@ -229,16 +255,32 @@ export default function EtablissementsPage() {
             key: "actif",
             header: "Statut",
             render: (r) => (
-              <span className={`badge ${r.actif ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500"}`}>
-                {r.actif ? "Actif" : "Inactif"}
-              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {r.id === user?.etablissement_courant && (
+                  <span className="badge bg-brand-600 text-white"><CheckCircle2 size={12} /> En cours de gestion</span>
+                )}
+                <span className={`badge ${r.actif ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500"}`}>
+                  {r.actif ? "Actif" : "Inactif"}
+                </span>
+              </div>
             ),
           },
           {
             key: "actions",
             header: "",
             render: (r) => (
-              <div className="flex justify-end gap-1">
+              <div className="flex items-center justify-end gap-1">
+                {r.id !== user?.etablissement_courant && (
+                  <button
+                    onClick={() => gerer(r)}
+                    disabled={!!bascule}
+                    className="mr-1 flex items-center gap-1.5 rounded-lg border border-brand-200 bg-brand-50/70 px-2.5 py-1 text-xs font-semibold text-brand-700 hover:bg-brand-100"
+                    title="Basculer vers cet établissement : toutes les pages afficheront ses données"
+                  >
+                    {bascule === r.id ? <Loader2 size={13} className="animate-spin" /> : <ArrowRightLeft size={13} />}
+                    Gérer
+                  </button>
+                )}
                 <button onClick={() => openEdit(r)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-brand-600" title="Modifier">
                   <Pencil size={15} />
                 </button>

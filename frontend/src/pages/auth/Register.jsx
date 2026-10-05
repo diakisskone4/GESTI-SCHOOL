@@ -32,7 +32,7 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const estRoleStaff = STAFF_ROLES.some((role) => role.value === form.role);
   const estEleve = form.role === "eleve";
-  const besoinEtablissement = estRoleStaff || estEleve;
+  const besoinEtablissement = estRoleStaff || estEleve || form.role === "parent";
 
   // Données publiques : établissements actifs, puis classes de l'année en cours de l'établissement choisi
   const { data: options } = useFetch(

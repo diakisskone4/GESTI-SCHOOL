@@ -4,6 +4,7 @@ import { ChevronRight, LayoutGrid, LogOut, Settings, User, X } from "lucide-reac
 import { useAuth, ROLE_LABELS } from "../../context/AuthContext";
 import { messagesApi } from "../../api/endpoints";
 import { MOBILE_TABS, sectionsPourRole } from "./navConfig";
+import EtablissementSwitcher from "./EtablissementSwitcher";
 
 const POLL_MS = 60_000;
 
@@ -108,6 +109,8 @@ function MenuSheet({ open, onClose }) {
             </div>
             <ChevronRight size={18} className="text-slate-300" />
           </button>
+
+          <EtablissementSwitcher variante="liste" />
 
           {sections.map((section) => (
             <div key={section.title}>

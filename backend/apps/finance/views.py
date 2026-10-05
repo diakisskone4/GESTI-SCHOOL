@@ -16,6 +16,7 @@ from apps.finance.serializers import (
     PaiementSerializer,
     TypeFraisSerializer,
 )
+from apps.core.tenancy import EtablissementScopedMixin, verifier_etablissement
 
 
 def _scoper_par_eleve_ou_parent(qs, user, chemin):
@@ -30,21 +31,25 @@ def _scoper_par_eleve_ou_parent(qs, user, chemin):
     return qs.none()
 
 
-class TypeFraisViewSet(viewsets.ModelViewSet):
+class TypeFraisViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
+    etablissement_field = "etablissement"
     queryset = TypeFrais.objects.all()
     serializer_class = TypeFraisSerializer
     permission_classes = [IsAdminOuComptable]
     filterset_fields = ["etablissement", "periodicite", "obligatoire"]
 
 
-class BaremeFraisViewSet(viewsets.ModelViewSet):
+class BaremeFraisViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
+    etablissement_field = "type_frais__etablissement"
+    etablissement_coherence = ("type_frais__etablissement", "niveau__etablissement", "annee_scolaire__etablissement")
     queryset = BaremeFrais.objects.select_related("type_frais", "niveau", "annee_scolaire")
     serializer_class = BaremeFraisSerializer
     permission_classes = [IsAdminOuComptable]
     filterset_fields = ["type_frais", "niveau", "annee_scolaire"]
 
 
-class BourseViewSet(viewsets.ModelViewSet):
+class BourseViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
+    etablissement_field = "inscription__eleve__etablissement"
     queryset = Bourse.objects.select_related("inscription__eleve")
     serializer_class = BourseSerializer
     permission_classes = [IsAdminOuComptable]
@@ -54,7 +59,9 @@ class BourseViewSet(viewsets.ModelViewSet):
         serializer.save(approuve_par=self.request.user)
 
 
-class FactureFraisViewSet(viewsets.ModelViewSet):
+class FactureFraisViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
+    etablissement_field = "inscription__eleve__etablissement"
+    etablissement_coherence = ("inscription__eleve__etablissement", "type_frais__etablissement")
     serializer_class = FactureFraisSerializer
     filterset_fields = ["inscription", "inscription__eleve", "type_frais", "periode", "statut"]
     search_fields = ["inscription__eleve__nom", "inscription__eleve__prenom", "inscription__eleve__matricule"]
@@ -77,7 +84,8 @@ class FactureFraisViewSet(viewsets.ModelViewSet):
                             content_type="application/pdf")
 
 
-class PaiementViewSet(viewsets.ModelViewSet):
+class PaiementViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
+    etablissement_field = "facture__inscription__eleve__etablissement"
     serializer_class = PaiementSerializer
     filterset_fields = ["facture", "mode_paiement", "annule", "date_paiement"]
 
@@ -109,7 +117,7 @@ class DashboardFinancierView(viewsets.ViewSet):
     permission_classes = [IsAdminOuComptable]
 
     def list(self, request):
-        etablissement_id = request.query_params.get("etablissement")
+        etablissement_id = verifier_etablissement(request.user, request.query_params.get("etablissement"))
         annee_id = request.query_params.get("annee_scolaire")
         factures = FactureFrais.objects.all()
         if etablissement_id:

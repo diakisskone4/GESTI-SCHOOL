@@ -13,9 +13,11 @@ from apps.finance.models import FactureFrais, Paiement
 from apps.reporting.models import RapportGenere
 from apps.reporting.serializers import RapportGenereSerializer
 from apps.students.models import Absence, Inscription
+from apps.core.tenancy import EtablissementScopedMixin, classe_du_perimetre, verifier_etablissement
 
 
-class RapportGenereViewSet(viewsets.ModelViewSet):
+class RapportGenereViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
+    etablissement_field = "etablissement"
     queryset = RapportGenere.objects.all()
     serializer_class = RapportGenereSerializer
     permission_classes = [IsAdmin]
@@ -36,7 +38,7 @@ class StatistiquesViewSet(viewsets.ViewSet):
         if not classe_id or not periode_id:
             return Response({"detail": "Paramètres 'classe' et 'periode' requis."}, status=400)
 
-        classe = Classe.objects.get(pk=classe_id)
+        classe = classe_du_perimetre(request.user, classe_id)
         inscriptions = classe.inscriptions.filter(statut="active")
         bulletins = Bulletin.objects.filter(inscription__in=inscriptions, periode_id=periode_id)
         total = bulletins.count()
@@ -56,7 +58,7 @@ class StatistiquesViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=["get"])
     def vue_ensemble_etablissement(self, request):
-        etablissement_id = request.query_params.get("etablissement")
+        etablissement_id = verifier_etablissement(request.user, request.query_params.get("etablissement"))
         annee_id = request.query_params.get("annee_scolaire")
         inscriptions = Inscription.objects.filter(statut="active")
         if etablissement_id:
@@ -79,7 +81,7 @@ class StatistiquesViewSet(viewsets.ViewSet):
     @action(detail=False, methods=["get"])
     def export_csv(self, request):
         """Export CSV générique des effectifs par classe."""
-        etablissement_id = request.query_params.get("etablissement")
+        etablissement_id = verifier_etablissement(request.user, request.query_params.get("etablissement"))
         classes = Classe.objects.all()
         if etablissement_id:
             classes = classes.filter(etablissement_id=etablissement_id)
@@ -94,7 +96,7 @@ class StatistiquesViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=["get"])
     def export_excel(self, request):
-        etablissement_id = request.query_params.get("etablissement")
+        etablissement_id = verifier_etablissement(request.user, request.query_params.get("etablissement"))
         classes = Classe.objects.all()
         if etablissement_id:
             classes = classes.filter(etablissement_id=etablissement_id)

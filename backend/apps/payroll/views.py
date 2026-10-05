@@ -16,23 +16,27 @@ from apps.payroll.serializers import (
     ElementSalaireSerializer,
     LigneBulletinPaieSerializer,
 )
+from apps.core.tenancy import EtablissementScopedMixin, etablissement_actif_id
 
 
-class ElementSalaireViewSet(viewsets.ModelViewSet):
+class ElementSalaireViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
+    etablissement_field = "etablissement"
     queryset = ElementSalaire.objects.all()
     serializer_class = ElementSalaireSerializer
     permission_classes = [IsAdminOuComptable]
     filterset_fields = ["etablissement", "nature"]
 
 
-class ContratSalaireViewSet(viewsets.ModelViewSet):
+class ContratSalaireViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
+    etablissement_field = "employe__etablissement"
     queryset = ContratSalaire.objects.select_related("employe")
     serializer_class = ContratSalaireSerializer
     permission_classes = [IsAdminOuComptable]
     filterset_fields = ["employe"]
 
 
-class LigneBulletinPaieViewSet(viewsets.ModelViewSet):
+class LigneBulletinPaieViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
+    etablissement_field = "bulletin__employe__etablissement"
     queryset = LigneBulletinPaie.objects.select_related("bulletin", "element")
     serializer_class = LigneBulletinPaieSerializer
     permission_classes = [IsAdminOuComptable]
@@ -43,8 +47,9 @@ class LigneBulletinPaieViewSet(viewsets.ModelViewSet):
         ligne.bulletin.calculer()
 
 
-class BulletinPaieViewSet(viewsets.ModelViewSet):
+class BulletinPaieViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
     """Bulletins de paie. Admin/comptable : tout. Un employé (non-admin/comptable) ne voit que les siens."""
+    etablissement_field = "employe__etablissement"
     serializer_class = BulletinPaieSerializer
     permission_classes = [IsAuthenticated]
     filterset_fields = ["employe", "mois", "annee", "statut"]
@@ -87,7 +92,8 @@ class BulletinPaieViewSet(viewsets.ModelViewSet):
                              content_type="application/pdf")
 
 
-class AvanceViewSet(viewsets.ModelViewSet):
+class AvanceViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
+    etablissement_field = "employe__etablissement"
     queryset = Avance.objects.select_related("employe")
     serializer_class = AvanceSerializer
     permission_classes = [IsAdminOuComptable]
@@ -105,6 +111,9 @@ class DashboardMasseSalarialeView(viewsets.ViewSet):
         mois = request.query_params.get("mois")
         annee = request.query_params.get("annee")
         qs = BulletinPaie.objects.all()
+        actif = etablissement_actif_id(request.user)
+        if actif is not None:
+            qs = qs.filter(employe__etablissement_id=actif)
         if mois:
             qs = qs.filter(mois=mois)
         if annee:

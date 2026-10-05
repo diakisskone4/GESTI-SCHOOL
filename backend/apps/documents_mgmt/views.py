@@ -9,6 +9,7 @@ from apps.core.pdf_utils import generer_document_administratif_pdf
 from apps.core.permissions import IsAdmin
 from apps.documents_mgmt.models import DocumentGenere
 from apps.documents_mgmt.serializers import DocumentGenereSerializer
+from apps.core.tenancy import EtablissementScopedMixin
 
 TITRES = {
     "certificat_scolarite": "Certificat de scolarité",
@@ -54,7 +55,8 @@ TYPE_ETABLISSEMENT_LABELS = {
 }
 
 
-class DocumentGenereViewSet(viewsets.ModelViewSet):
+class DocumentGenereViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
+    etablissement_field = ("eleve__etablissement", "employe__etablissement")
     serializer_class = DocumentGenereSerializer
     filterset_fields = ["type_document", "eleve", "employe"]
     search_fields = ["reference", "objet"]

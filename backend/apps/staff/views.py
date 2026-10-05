@@ -13,9 +13,11 @@ from apps.staff.serializers import (
     EnseignantSerializer,
     PresenceEmployeSerializer,
 )
+from apps.core.tenancy import EtablissementScopedMixin
 
 
-class EmployeViewSet(viewsets.ModelViewSet):
+class EmployeViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
+    etablissement_field = "etablissement"
     queryset = Employe.objects.select_related("user", "etablissement")
     serializer_class = EmployeSerializer
     permission_classes = [IsAdminOuComptable]
@@ -23,7 +25,8 @@ class EmployeViewSet(viewsets.ModelViewSet):
     search_fields = ["nom", "prenom", "matricule", "telephone"]
 
 
-class EnseignantViewSet(viewsets.ModelViewSet):
+class EnseignantViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
+    etablissement_field = "etablissement"
     queryset = Enseignant.objects.select_related("user", "etablissement").prefetch_related("matieres_enseignees")
     serializer_class = EnseignantSerializer
     permission_classes = [IsAdminOrReadOnly]
@@ -54,14 +57,17 @@ class EnseignantViewSet(viewsets.ModelViewSet):
         })
 
 
-class AffectationViewSet(viewsets.ModelViewSet):
+class AffectationViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
+    etablissement_field = "classe__etablissement"
+    etablissement_coherence = ("classe__etablissement", "matiere__etablissement", "enseignant__etablissement", "annee_scolaire__etablissement")
     queryset = Affectation.objects.select_related("enseignant", "classe", "matiere", "annee_scolaire")
     serializer_class = AffectationSerializer
     permission_classes = [IsAdmin]
     filterset_fields = ["enseignant", "classe", "matiere", "annee_scolaire", "actif"]
 
 
-class PresenceEmployeViewSet(viewsets.ModelViewSet):
+class PresenceEmployeViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
+    etablissement_field = "employe__etablissement"
     queryset = PresenceEmploye.objects.select_related("employe")
     serializer_class = PresenceEmployeSerializer
     permission_classes = [IsAdmin]
@@ -71,7 +77,8 @@ class PresenceEmployeViewSet(viewsets.ModelViewSet):
         serializer.save(enregistre_par=self.request.user)
 
 
-class DocumentPedagogiqueViewSet(viewsets.ModelViewSet):
+class DocumentPedagogiqueViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
+    etablissement_field = "classe__etablissement"
     queryset = DocumentPedagogique.objects.select_related("enseignant", "classe", "matiere")
     serializer_class = DocumentPedagogiqueSerializer
     permission_classes = [IsEnseignant]

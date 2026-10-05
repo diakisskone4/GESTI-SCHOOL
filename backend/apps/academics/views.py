@@ -5,6 +5,7 @@ import openpyxl
 from django.db import transaction
 from django.db.models import ProtectedError
 from django.http import FileResponse, HttpResponse
+from django.shortcuts import get_object_or_404
 from rest_framework import serializers, status, viewsets
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.decorators import action
@@ -29,6 +30,7 @@ from apps.academics.services import (
 )
 from apps.core.models import Classe, Periode
 from apps.core.permissions import IsAdmin, IsAdminOrEnseignantReadWrite, IsAdminOrReadOnly
+from apps.core.tenancy import EtablissementScopedMixin, classe_du_perimetre, verifier_etablissement
 
 
 TYPES_EVALUATION_PAR_DEFAUT = [
@@ -38,8 +40,9 @@ TYPES_EVALUATION_PAR_DEFAUT = [
 ]
 
 
-class TypeEvaluationViewSet(viewsets.ModelViewSet):
+class TypeEvaluationViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
     """Types d'évaluation et leur poids : lecture pour tous, modification par l'administration."""
+    etablissement_field = "etablissement"
     queryset = TypeEvaluation.objects.all()
     serializer_class = TypeEvaluationSerializer
     permission_classes = [IsAdminOrReadOnly]
@@ -56,7 +59,7 @@ class TypeEvaluationViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["post"])
     def initialiser(self, request):
         """Crée les types par défaut (Interrogation ×1, Devoir ×1, Composition ×2) s'ils n'existent pas."""
-        etablissement_id = request.data.get("etablissement") or request.user.etablissement_courant_id
+        etablissement_id = verifier_etablissement(request.user, request.data.get("etablissement"))
         if not etablissement_id:
             raise serializers.ValidationError({"etablissement": "Établissement requis."})
         for t in TYPES_EVALUATION_PAR_DEFAUT:
@@ -68,8 +71,10 @@ class TypeEvaluationViewSet(viewsets.ModelViewSet):
         return Response(TypeEvaluationSerializer(types, many=True).data)
 
 
-class EvaluationViewSet(viewsets.ModelViewSet):
+class EvaluationViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
     """Évaluations (colonnes du carnet de notes) et saisie groupée des notes."""
+    etablissement_field = "classe__etablissement"
+    etablissement_coherence = ("classe__etablissement", "matiere__etablissement", "type_evaluation__etablissement")
     serializer_class = EvaluationSerializer
     permission_classes = [IsAdminOrEnseignantReadWrite]
     filterset_fields = ["classe", "matiere", "periode", "type_evaluation"]
@@ -114,7 +119,7 @@ class EvaluationViewSet(viewsets.ModelViewSet):
         if manquants:
             raise serializers.ValidationError({p: "Paramètre requis." for p in manquants})
 
-        classe = Classe.objects.get(pk=params["classe"])
+        classe = classe_du_perimetre(user, params["classe"])
         evaluations = list(
             self.get_queryset().filter(classe=classe, matiere_id=params["matiere"], periode_id=params["periode"])
         )
@@ -207,7 +212,9 @@ def _scoper_par_eleve_ou_parent(qs, user, chemin="inscription__eleve"):
     return qs.none()
 
 
-class NoteViewSet(viewsets.ModelViewSet):
+class NoteViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
+    etablissement_field = "inscription__eleve__etablissement"
+    etablissement_coherence = ("inscription__eleve__etablissement", "matiere__etablissement")
     serializer_class = NoteSerializer
     permission_classes = [IsAdminOrEnseignantReadWrite]
     filterset_fields = ["inscription", "matiere", "periode", "type_evaluation", "enseignant", "evaluation"]
@@ -223,7 +230,8 @@ class NoteViewSet(viewsets.ModelViewSet):
         serializer.save(enseignant=enseignant or serializer.validated_data.get("enseignant"))
 
 
-class MoyenneMatiereViewSet(viewsets.ReadOnlyModelViewSet):
+class MoyenneMatiereViewSet(EtablissementScopedMixin, viewsets.ReadOnlyModelViewSet):
+    etablissement_field = "inscription__eleve__etablissement"
     serializer_class = MoyenneMatiereSerializer
     permission_classes = [IsAuthenticated]
     filterset_fields = ["inscription", "matiere", "periode"]
@@ -233,9 +241,10 @@ class MoyenneMatiereViewSet(viewsets.ReadOnlyModelViewSet):
         return _scoper_par_eleve_ou_parent(qs, self.request.user)
 
 
-class BulletinViewSet(viewsets.ModelViewSet):
+class BulletinViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
     """Bulletins. Admin/enseignant : tout. Élève/parent : uniquement les bulletins
     de leur(s) propre(s) enfant(s) (accès restreint côté requête)."""
+    etablissement_field = "inscription__eleve__etablissement"
     serializer_class = BulletinSerializer
     filterset_fields = ["inscription", "inscription__eleve", "periode", "valide"]
 
@@ -258,8 +267,8 @@ class BulletinViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=["post"])
     def calculer(self, request):
         """Calcule moyennes matières, moyenne générale et rangs pour une classe/période."""
-        classe = Classe.objects.get(pk=request.data.get("classe"))
-        periode = Periode.objects.get(pk=request.data.get("periode"))
+        classe = classe_du_perimetre(request.user, request.data.get("classe"))
+        periode = get_object_or_404(Periode, pk=request.data.get("periode"), annee_scolaire=classe.annee_scolaire)
         calculer_moyennes_matiere(classe, periode)
         bulletins = calculer_moyenne_generale_et_rangs(classe, periode)
         return Response({
@@ -290,14 +299,17 @@ class BulletinViewSet(viewsets.ModelViewSet):
                              filename=bulletin.fichier_pdf.name.split("/")[-1], content_type="application/pdf")
 
 
-class TableauHonneurViewSet(viewsets.ReadOnlyModelViewSet):
+class TableauHonneurViewSet(EtablissementScopedMixin, viewsets.ReadOnlyModelViewSet):
+    etablissement_field = "inscription__eleve__etablissement"
     queryset = TableauHonneur.objects.select_related("inscription__eleve", "inscription__classe", "periode")
     serializer_class = TableauHonneurSerializer
     permission_classes = [IsAuthenticated]
     filterset_fields = ["periode", "niveau", "inscription__classe"]
 
 
-class ExamenViewSet(viewsets.ModelViewSet):
+class ExamenViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
+    etablissement_field = "etablissement"
+    etablissement_coherence = ("etablissement", "classe__etablissement", "matiere__etablissement")
     queryset = Examen.objects.select_related("classe", "matiere", "periode").prefetch_related("surveillants")
     serializer_class = ExamenSerializer
     permission_classes = [IsAdmin]
@@ -312,6 +324,7 @@ class ExportResultatsView(viewsets.ViewSet):
     def excel(self, request):
         classe_id = request.query_params.get("classe")
         periode_id = request.query_params.get("periode")
+        classe_du_perimetre(request.user, classe_id)
         bulletins = Bulletin.objects.filter(inscription__classe_id=classe_id, periode_id=periode_id).select_related(
             "inscription__eleve"
         ).order_by("rang")
