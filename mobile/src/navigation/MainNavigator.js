@@ -30,6 +30,8 @@ function stackWithPdfViewer(name, Component, title) {
   };
 }
 
+// L'accueil a sa propre pile : ses widgets ouvrent des PDF (carte, factures, reçus) avec retour à l'accueil
+const AccueilStack = stackWithPdfViewer("Accueil", DashboardScreen, "Accueil");
 const BulletinsStack = stackWithPdfViewer("Bulletins", BulletinsScreen, "Bulletins");
 const DocumentsStack = stackWithPdfViewer("Documents", DocumentsScreen, "Documents");
 
@@ -58,7 +60,7 @@ export default function MainNavigator() {
           ),
         })}
       >
-        <Tab.Screen name="Accueil" component={DashboardScreen} />
+        <Tab.Screen name="Accueil" component={AccueilStack} />
         {isEleveOuParent && (
           <>
             <Tab.Screen name="Notes" component={NotesScreen} />

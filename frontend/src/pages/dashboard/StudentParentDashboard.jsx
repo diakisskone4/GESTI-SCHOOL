@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Award, BookOpenCheck, IdCard, MessageSquareWarning, GraduationCap, Users,
   FileText, Wallet, Eye, Clock, DoorOpen, CheckCircle2, XCircle, Loader2, Receipt,
+  BookOpen, CalendarClock, ChevronLeft, ChevronRight, ClipboardList, FolderOpen,
 } from "lucide-react";
 import PageHeader from "../../components/ui/PageHeader";
 import StatCard from "../../components/ui/StatCard";
@@ -17,16 +18,42 @@ import {
 import api from "../../api/client";
 import { fetchAuthBlobUrl } from "../../utils/download";
 
-const TABS = [
-  { key: "vue", label: "Vue d'ensemble" },
-  { key: "notes", label: "Notes" },
-  { key: "bulletins", label: "Bulletins" },
-  { key: "emploi", label: "Emploi du temps" },
-  { key: "absences", label: "Absences" },
-  { key: "carte", label: "Carte scolaire" },
-  { key: "documents", label: "Documents" },
-  { key: "recus", label: "Reçus & factures" },
+// Rubriques du tableau de bord, affichées en widgets sur l'accueil
+const WIDGETS = [
+  { key: "notes", label: "Notes", icon: BookOpenCheck, tone: "bg-violet-100 text-violet-600", ring: "hover:border-violet-200" },
+  { key: "bulletins", label: "Bulletins", icon: BookOpen, tone: "bg-sky-100 text-sky-600", ring: "hover:border-sky-200" },
+  { key: "emploi", label: "Emploi du temps", icon: CalendarClock, tone: "bg-indigo-100 text-indigo-600", ring: "hover:border-indigo-200" },
+  { key: "absences", label: "Absences", icon: ClipboardList, tone: "bg-rose-100 text-rose-600", ring: "hover:border-rose-200" },
+  { key: "carte", label: "Carte scolaire", icon: IdCard, tone: "bg-amber-100 text-amber-600", ring: "hover:border-amber-200" },
+  { key: "documents", label: "Documents", icon: FolderOpen, tone: "bg-teal-100 text-teal-600", ring: "hover:border-teal-200" },
+  { key: "recus", label: "Reçus & factures", icon: Wallet, tone: "bg-emerald-100 text-emerald-600", ring: "hover:border-emerald-200" },
 ];
+
+/** Tuile cliquable du tableau de bord : icône, titre et résumé en direct de la rubrique. */
+function Widget({ widget, resume, detail, alerte, onClick }) {
+  const Icon = widget.icon;
+  return (
+    <button
+      onClick={onClick}
+      className={`press group flex flex-col rounded-2xl border border-slate-100 bg-white p-4 text-left shadow-[var(--shadow-card)] transition-all hover:shadow-[var(--shadow-card-hover)] ${widget.ring}`}
+    >
+      <div className="flex items-start justify-between">
+        <span className={`flex h-11 w-11 items-center justify-center rounded-xl ${widget.tone}`}>
+          <Icon size={21} />
+        </span>
+        {alerte ? (
+          <span className="rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-bold text-white">{alerte}</span>
+        ) : (
+          <ChevronRight size={16} className="text-slate-300 transition-transform group-hover:translate-x-0.5" />
+        )}
+      </div>
+      <p className="mt-3 text-sm font-bold text-slate-800">{widget.label}</p>
+      <p className="mt-0.5 text-[13px] font-semibold text-slate-600">{resume}</p>
+      {detail && <p className="mt-0.5 text-xs text-slate-400">{detail}</p>}
+    </button>
+  );
+}
+
 
 const DAYS = [
   { index: 0, label: "Lundi" }, { index: 1, label: "Mardi" }, { index: 2, label: "Mercredi" },
@@ -193,6 +220,57 @@ export default function StudentParentDashboard() {
   );
   const factures = facturesData?.results || [];
 
+  // --- Résumés affichés sur les widgets ---
+  const totalCoef = moyennes.reduce((t, m) => t + Number(m.coefficient || 1), 0);
+  const moyenneGenerale = totalCoef
+    ? moyennes.reduce((t, m) => t + Number(m.moyenne) * Number(m.coefficient || 1), 0) / totalCoef
+    : null;
+  const periodeCourante = periodes.find((p) => String(p.id) === String(selectedPeriodeId));
+  const indexJour = (new Date().getDay() + 6) % 7; // lundi = 0, dimanche = 6
+  const coursDuJour = creneauxParJour[indexJour] || [];
+  const nbAbsences = absences.filter((a) => a.type_evenement === "absence").length;
+  const nbRetards = absences.filter((a) => a.type_evenement === "retard").length;
+  const nbNonJustifiees = absences.filter((a) => !a.justifiee).length;
+  const resteAPayer = factures
+    .filter((f) => f.statut !== "annulee")
+    .reduce((t, f) => t + Math.max(Number(f.solde || 0), 0), 0);
+  const dernierBulletin = [...bulletins].sort((a, b) => String(b.periode).localeCompare(String(a.periode)))[0];
+  const chargement = (enCours, valeur) => (enCours ? "Chargement…" : valeur);
+
+  const resumes = {
+    notes: {
+      resume: chargement(loadingNotes, moyenneGenerale !== null ? `Moyenne ${moyenneGenerale.toFixed(2).replace(".", ",")} / 20` : "Aucune note"),
+      detail: periodeCourante ? `${periodeCourante.libelle} · ${moyennes.length} matière(s)` : null,
+    },
+    bulletins: {
+      resume: bulletins.length ? `${bulletins.length} bulletin(s)` : "Aucun bulletin",
+      detail: dernierBulletin?.rang ? `Dernier rang : ${dernierBulletin.rang}/${dernierBulletin.effectif_classe}` : dernierBulletin?.mention || null,
+    },
+    emploi: {
+      resume: chargement(loadingEmploi, indexJour > 5 ? "Week-end" : coursDuJour.length ? `${coursDuJour.length} cours aujourd'hui` : "Pas de cours aujourd'hui"),
+      detail: coursDuJour[0] ? `${coursDuJour[0].heure_debut?.substring(0, 5)} · ${coursDuJour[0].matiere_nom}` : null,
+    },
+    absences: {
+      resume: chargement(loadingAbsences, `${nbAbsences} absence(s) · ${nbRetards} retard(s)`),
+      detail: nbNonJustifiees ? `${nbNonJustifiees} non justifiée(s)` : absences.length ? "Toutes justifiées" : null,
+      alerte: nbNonJustifiees || null,
+    },
+    carte: {
+      resume: chargement(loadingCarte, carte ? `N° ${carte.numero_carte}` : "Pas encore générée"),
+      detail: carte?.date_expiration ? `Valide jusqu'au ${new Date(carte.date_expiration).toLocaleDateString("fr-FR")}` : null,
+    },
+    documents: {
+      resume: chargement(loadingDocuments, documents.length ? `${documents.length} document(s)` : "Aucun document"),
+      detail: documents[0] ? `Dernier : ${new Date(documents[0].created_at).toLocaleDateString("fr-FR")}` : null,
+    },
+    recus: {
+      resume: chargement(loadingFactures, resteAPayer > 0 ? `Reste ${fmt(resteAPayer)}` : factures.length ? "Tout est réglé" : "Aucune facture"),
+      detail: factures.length ? `${factures.length} facture(s)` : null,
+      alerte: resteAPayer > 0 ? "À payer" : null,
+    },
+  };
+  const rubrique = WIDGETS.find((w) => w.key === tab);
+
   return (
     <div>
       <PageHeader
@@ -226,26 +304,46 @@ export default function StudentParentDashboard() {
 
       {!loadingEnfant && eleve && (
         <>
-          <div className="mb-5 inline-flex flex-wrap rounded-xl bg-slate-100 p-1">
-            {TABS.map((t) => (
-              <button
-                key={t.key}
-                onClick={() => setTab(t.key)}
-                className={`rounded-lg px-3.5 py-2 text-sm font-medium transition-colors ${
-                  tab === t.key ? "bg-white text-brand-600 shadow-sm" : "text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
+          {tab === "vue" ? (
+            <>
+              {/* Chiffres clés */}
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <StatCard icon={IdCard} tone="brand" label="Classe actuelle" value={eleve.classe_actuelle || "—"} />
+                <StatCard icon={BookOpenCheck} tone="sky" label="Absences" value={dernier?.nb_absences ?? 0} />
+                <StatCard icon={MessageSquareWarning} tone="amber" label="Retards" value={dernier?.nb_retards ?? 0} />
+                <StatCard icon={Award} tone="emerald" label="Récompenses" value={dernier?.recompenses ?? 0} />
+              </div>
 
-          {tab === "vue" && (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <StatCard icon={IdCard} tone="brand" label="Classe actuelle" value={eleve.classe_actuelle || "—"} />
-              <StatCard icon={BookOpenCheck} tone="sky" label="Absences" value={dernier?.nb_absences ?? 0} />
-              <StatCard icon={MessageSquareWarning} tone="amber" label="Retards" value={dernier?.nb_retards ?? 0} />
-              <StatCard icon={Award} tone="emerald" label="Récompenses" value={dernier?.recompenses ?? 0} />
+              {/* Rubriques en widgets */}
+              <p className="mb-3 mt-6 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                {estParent ? `Scolarité de ${eleve.prenom}` : "Ma scolarité"}
+              </p>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                {WIDGETS.map((w) => (
+                  <Widget key={w.key} widget={w} {...resumes[w.key]} onClick={() => setTab(w.key)} />
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="mb-4 flex items-center gap-3">
+              <button
+                onClick={() => setTab("vue")}
+                className="press flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 hover:text-brand-600"
+                aria-label="Retour au tableau de bord"
+              >
+                <ChevronLeft size={20} />
+              </button>
+              {rubrique && (
+                <div className="flex items-center gap-2.5">
+                  <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${rubrique.tone}`}>
+                    <rubrique.icon size={18} />
+                  </span>
+                  <div>
+                    <p className="text-base font-bold leading-tight text-slate-800">{rubrique.label}</p>
+                    <p className="text-xs text-slate-400">{resumes[rubrique.key]?.resume}</p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
