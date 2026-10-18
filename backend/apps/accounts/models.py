@@ -42,6 +42,9 @@ class User(AbstractUser):
         PARENT = "parent", "Parent"
         COMPTABLE = "comptable", "Comptable / Caissier"
         SURVEILLANT = "surveillant", "Surveillant général"
+        # Équipe qui exploite la plateforme (console développeurs) : jamais rattachée à un
+        # établissement, invisible des établissements, sans accès à leurs données internes.
+        DEVELOPPEUR = "developpeur", "Développeur (plateforme)"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email = models.EmailField(unique=True)
@@ -123,6 +126,10 @@ class User(AbstractUser):
     @property
     def est_comptable(self):
         return self.role == self.Role.COMPTABLE
+
+    @property
+    def est_developpeur(self):
+        return self.role == self.Role.DEVELOPPEUR
 
     @property
     def est_surveillant(self):

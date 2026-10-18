@@ -156,7 +156,8 @@ class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
 
     def get_queryset(self):
-        qs = super().get_queryset()
+        # Les comptes de l'équipe plateforme n'apparaissent jamais côté établissement
+        qs = super().get_queryset().exclude(role=User.Role.DEVELOPPEUR)
         actif = etablissement_actif_id(self.request.user)
         if actif is None:
             return qs
@@ -173,6 +174,8 @@ class UserViewSet(viewsets.ModelViewSet):
     def _verifier_role(self, role):
         """Seul un super administrateur peut attribuer le rôle « superadmin »."""
         demandeur = self.request.user
+        if role == User.Role.DEVELOPPEUR:
+            raise serializers.ValidationError({"role": "Rôle réservé à l'équipe plateforme."})
         if role == User.Role.SUPERADMIN and not (demandeur.role == User.Role.SUPERADMIN or demandeur.is_superuser):
             raise serializers.ValidationError({"role": "Seul un super administrateur peut attribuer ce rôle."})
 

@@ -16,6 +16,7 @@ class UserSerializer(serializers.ModelSerializer):
     est_eleve = serializers.BooleanField(read_only=True)
     est_parent = serializers.BooleanField(read_only=True)
     est_comptable = serializers.BooleanField(read_only=True)
+    abonnement = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -23,9 +24,20 @@ class UserSerializer(serializers.ModelSerializer):
             "id", "email", "first_name", "last_name", "full_name", "role",
             "telephone", "photo", "etablissements", "etablissement_courant",
             "langue_preferee", "is_active", "date_joined", "date_derniere_activite",
-            "est_admin", "est_enseignant", "est_eleve", "est_parent", "est_comptable",
+            "est_admin", "est_enseignant", "est_eleve", "est_parent", "est_comptable", "abonnement",
         ]
         read_only_fields = ["id", "date_joined", "date_derniere_activite"]
+
+    def get_abonnement(self, obj):
+        """Abonnement de l'établissement courant, visible des seuls administrateurs."""
+        if obj.role not in (User.Role.ADMIN, User.Role.SUPERADMIN) or not obj.etablissement_courant_id:
+            return None
+        from apps.plateforme.models import Abonnement
+
+        ab = Abonnement.objects.filter(etablissement_id=obj.etablissement_courant_id).first()
+        if not ab:
+            return None
+        return {"statut": ab.statut, "date_fin": ab.date_fin, "jours_restants": ab.jours_restants}
 
     def validate_email(self, value):
         return verifier_email_utilisateur(value, exclure_pk=getattr(self.instance, "pk", None))
@@ -163,6 +175,9 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         existant = User.objects.filter(email__iexact=email).values_list("email", flat=True).first()
         attrs["email"] = existant or email
         data = super().validate(attrs)
+        from apps.plateforme.acces import verifier_acces
+
+        verifier_acces(self.user)
         data["user"] = UserSerializer(self.user).data
         return data
 

@@ -40,6 +40,13 @@ services:
         fromDatabase: { name: gesti-school-db, property: host }
       - key: DB_PORT
         fromDatabase: { name: gesti-school-db, property: port }
+      # Console de l'équipe développeurs : code secret de l'inscription privée (/equipe/inscription).
+      # Laisser vide pour fermer l'inscription une fois l'équipe créée.
+      - key: PLATEFORME_CODE_INVITATION
+        sync: false
+      # Nombre maximum d'établissements sur ce déploiement
+      - key: PLATEFORME_MAX_ETABLISSEMENTS
+        value: "50"
       # Compte administrateur créé au premier déploiement (à saisir dans le dashboard)
       - key: DJANGO_SUPERUSER_EMAIL
         sync: false

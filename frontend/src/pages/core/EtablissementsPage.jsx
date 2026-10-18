@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowRightLeft, CheckCircle2, ImagePlus, Loader2, Pencil, Plus, School, Search, Trash2, X } from "lucide-react";
+import { ArrowRightLeft, CheckCircle2, ImagePlus, Loader2, Pencil, School, Search, X } from "lucide-react";
 import PageHeader from "../../components/ui/PageHeader";
 import Modal from "../../components/ui/Modal";
 import DataTable from "../../components/ui/DataTable";
@@ -114,13 +114,6 @@ export default function EtablissementsPage() {
   const [removed, setRemoved] = useState({});  // { logo: true, ... } images à supprimer
   const [saving, setSaving] = useState(false);
 
-  const openCreate = () => {
-    setEditing(null);
-    setForm(EMPTY_ETABLISSEMENT);
-    setFiles({});
-    setRemoved({});
-    setModalOpen(true);
-  };
 
   const openEdit = (etab) => {
     setEditing(etab);
@@ -188,16 +181,6 @@ Chaque établissement a ses propres données (années, classes, élèves, financ
     }
   };
 
-  const handleDelete = async (etab) => {
-    if (!window.confirm(`Supprimer l'établissement « ${etab.nom} » ? Toutes ses données (élèves, classes...) seront supprimées.`)) return;
-    try {
-      await etablissementsApi.remove(etab.id);
-      notify("Établissement supprimé.", "success");
-      reload();
-    } catch (err) {
-      notify(extractErrorMessage(err), "error");
-    }
-  };
 
   const set = (field) => (e) => setForm({ ...form, [field]: e.target.value });
 
@@ -205,12 +188,7 @@ Chaque établissement a ses propres données (années, classes, élèves, financ
     <div className="space-y-6">
       <PageHeader
         title="Établissements"
-        subtitle="Chaque établissement a ses propres données. « Gérer » bascule l'application vers l'établissement choisi."
-        actions={
-          <button onClick={openCreate} className="btn-primary">
-            <Plus size={16} /> Ajouter un établissement
-          </button>
-        }
+        subtitle="Identité, coordonnées, documents officiels et direction de vos établissements. « Gérer » bascule l'application vers l'établissement choisi."
       />
 
       <div className="card flex flex-wrap items-center gap-4 p-5">
@@ -284,9 +262,6 @@ Chaque établissement a ses propres données (années, classes, élèves, financ
                 <button onClick={() => openEdit(r)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-brand-600" title="Modifier">
                   <Pencil size={15} />
                 </button>
-                <button onClick={() => handleDelete(r)} className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600" title="Supprimer">
-                  <Trash2 size={15} />
-                </button>
               </div>
             ),
           },
@@ -327,10 +302,6 @@ Chaque établissement a ses propres données (années, classes, élèves, financ
                 </select>
               </div>
             </div>
-            <label className="flex items-center gap-2 text-sm text-slate-600">
-              <input type="checkbox" checked={!!form.actif} onChange={(e) => setForm({ ...form, actif: e.target.checked })} />
-              Établissement actif
-            </label>
           </Section>
 
           <Section title="Coordonnées">

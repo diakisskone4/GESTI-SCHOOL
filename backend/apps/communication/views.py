@@ -31,7 +31,7 @@ class MessageViewSet(viewsets.ModelViewSet):
     def destinataires(self, request):
         """Retourne les utilisateurs du même établissement avec vraies données (nom, rôle, email)."""
         user = request.user
-        queryset = User.objects.filter(is_active=True).exclude(pk=user.pk).select_related("profil_employe", "profil_eleve")
+        queryset = User.objects.filter(is_active=True).exclude(pk=user.pk).exclude(role=User.Role.DEVELOPPEUR).select_related("profil_employe", "profil_eleve")
         actif = etablissement_actif_id(user)
         if actif is not None:
             queryset = queryset.filter(etablissements=actif)

@@ -150,3 +150,19 @@ export const statistiquesApi = {
   exportCsvPath: (etablissement) => `/statistiques/export_csv/?etablissement=${etablissement}`,
 };
 export const rapportsApi = resource("/rapports");
+
+// --- Console de l'équipe développeurs (invisible des établissements) ----
+export const plateformeApi = {
+  statistiques: () => api.get("/plateforme/statistiques/").then((r) => r.data),
+  etablissements: {
+    ...resource("/plateforme/etablissements"),
+    remove: (id, confirmation) => api.delete(`/plateforme/etablissements/${id}/`, { params: { confirmation } }),
+    activer: (id) => api.post(`/plateforme/etablissements/${id}/activer/`).then((r) => r.data),
+    desactiver: (id) => api.post(`/plateforme/etablissements/${id}/desactiver/`).then((r) => r.data),
+    renouveler: (id, duree_mois) => api.post(`/plateforme/etablissements/${id}/renouveler/`, { duree_mois }).then((r) => r.data),
+    notes: (id, notes) => api.patch(`/plateforme/etablissements/${id}/notes/`, { notes }).then((r) => r.data),
+    ajouterAdministrateur: (id, data) => api.post(`/plateforme/etablissements/${id}/ajouter_administrateur/`, data).then((r) => r.data),
+  },
+  equipe: resource("/plateforme/equipe"),
+  inscriptionEquipe: (data) => api.post("/plateforme/inscription-equipe/", data).then((r) => r.data),
+};

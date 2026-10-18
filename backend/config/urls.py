@@ -40,6 +40,8 @@ urlpatterns = [
     path("api/v1/", include("apps.communication.urls")),
     # Reporting / statistiques
     path("api/v1/", include("apps.reporting.urls")),
+    # Console de l'équipe développeurs (établissements clients, abonnements)
+    path("api/v1/", include("apps.plateforme.urls")),
 
     # Documentation API
     path("api/docs/", schema_view.with_ui("swagger", cache_timeout=0), name="schema-swagger-ui"),

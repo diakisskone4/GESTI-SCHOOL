@@ -4,6 +4,7 @@ export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localho
 
 const ACCESS_KEY = "gs_access_token";
 const REFRESH_KEY = "gs_refresh_token";
+export const ACCES_SUSPENDU_KEY = "gs_acces_suspendu";
 
 export const tokenStore = {
   getAccess: () => localStorage.getItem(ACCESS_KEY),
@@ -76,6 +77,16 @@ api.interceptors.response.use(
       } finally {
         isRefreshing = false;
       }
+    }
+
+    // Abonnement de l'établissement expiré ou suspendu par l'équipe : page d'explication
+    if (status === 403 && error.response?.data?.code === "abonnement_inactif" && tokenStore.getAccess()) {
+      try {
+        sessionStorage.setItem(ACCES_SUSPENDU_KEY, error.response.data.detail || "");
+      } catch {
+        // stockage indisponible : la page affichera un message générique
+      }
+      if (window.location.pathname !== "/acces-suspendu") window.location.assign("/acces-suspendu");
     }
 
     return Promise.reject(error);

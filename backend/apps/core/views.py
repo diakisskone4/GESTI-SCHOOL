@@ -28,6 +28,7 @@ from apps.core.serializers import (
 )
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny
 
 from apps.core.images import contenu_image, type_mime
@@ -61,22 +62,18 @@ class EtablissementViewSet(viewsets.ModelViewSet):
         reponse["Cache-Control"] = "public, max-age=3600"
         return reponse
 
-    def perform_destroy(self, instance):
-        from rest_framework.exceptions import ValidationError
-
-        if instance.pk == self.request.user.etablissement_courant_id:
-            raise ValidationError({"detail": "Basculez d'abord vers un autre établissement avant de supprimer celui-ci."})
-        instance.delete()
-
+    # Création et suppression passent par la console de l'équipe Gesti-Scolaire (limite du nombre
+    # d'établissements, abonnement et compte administrateur créés ensemble : apps/plateforme).
     def perform_create(self, serializer):
-        """Rattache automatiquement le créateur à l'établissement qu'il vient de créer,
-        et en fait son établissement courant s'il n'en avait pas encore."""
-        etablissement = serializer.save()
-        user = self.request.user
-        user.etablissements.add(etablissement)
-        if not user.etablissement_courant_id:
-            user.etablissement_courant = etablissement
-            user.save(update_fields=["etablissement_courant"])
+        raise PermissionDenied("La création d'un établissement se fait par l'équipe Gesti-Scolaire.")
+
+    def perform_update(self, serializer):
+        # Le statut d'accès est géré par la plateforme (abonnement), pas par l'établissement
+        serializer.validated_data.pop("actif", None)
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        raise PermissionDenied("La suppression d'un établissement se fait par l'équipe Gesti-Scolaire.")
 
 
 class AnneeScolaireViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):

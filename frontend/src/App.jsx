@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import { ToastProvider } from "./context/ToastContext";
@@ -28,6 +29,14 @@ import AnnoncesPage from "./pages/communication/AnnoncesPage";
 import StatistiquesPage from "./pages/reporting/StatistiquesPage";
 import ProfilePage from "./pages/profile/ProfilePage";
 import UtilisateursPage from "./pages/accounts/UtilisateursPage";
+import AccesSuspendu from "./pages/auth/AccesSuspendu";
+
+// Console de l'équipe développeurs : chargée à part, jamais incluse dans le code des établissements
+const ConsoleLayout = lazy(() => import("./pages/console/ConsoleLayout"));
+const ConsoleDashboard = lazy(() => import("./pages/console/ConsoleDashboard"));
+const ConsoleEtablissements = lazy(() => import("./pages/console/ConsoleEtablissements"));
+const ConsoleEquipe = lazy(() => import("./pages/console/ConsoleEquipe"));
+const InscriptionEquipe = lazy(() => import("./pages/console/InscriptionEquipe"));
 
 const ADMIN_ROLES = ["admin", "superadmin"];
 const FINANCE_ROLES = ["admin", "superadmin", "comptable"];
@@ -39,8 +48,20 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <ToastProvider>
+          <Suspense fallback={null}>
           <Routes>
             <Route path="/connexion" element={<Login />} />
+            <Route path="/acces-suspendu" element={<AccesSuspendu />} />
+            {/* Inscription privée de l'équipe (adresse non référencée, code d'invitation exigé) */}
+            <Route path="/equipe/inscription" element={<InscriptionEquipe />} />
+
+            <Route element={<ProtectedRoute espace="console" />}>
+              <Route element={<ConsoleLayout />}>
+                <Route path="/console" element={<ConsoleDashboard />} />
+                <Route path="/console/etablissements" element={<ConsoleEtablissements />} />
+                <Route path="/console/equipe" element={<ConsoleEquipe />} />
+              </Route>
+            </Route>
             <Route path="/inscription" element={<Register />} />
             <Route path="/inscription/:role" element={<Register />} />
 
@@ -84,6 +105,7 @@ export default function App() {
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          </Suspense>
           <InstallPrompt />
         </ToastProvider>
       </AuthProvider>

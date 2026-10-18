@@ -72,4 +72,5 @@ export const ROLE_LABELS = {
   parent: "Parent",
   comptable: "Comptable",
   surveillant: "Surveillant",
+  developpeur: "Équipe Gesti-Scolaire",
 };

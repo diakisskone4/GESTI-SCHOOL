@@ -50,6 +50,7 @@ LOCAL_APPS = [
     "apps.payroll",
     "apps.communication",
     "apps.reporting",
+    "apps.plateforme",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -160,7 +161,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # ---------------------------------------------------------------------------
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        # JWT + vérification de l'abonnement de l'établissement (apps/plateforme/acces.py)
+        "apps.plateforme.acces.JWTAuthentificationAbonnement",
     ),
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
@@ -239,3 +241,11 @@ LOGGING = {
     "handlers": {"console": {"class": "logging.StreamHandler"}},
     "root": {"handlers": ["console"], "level": "INFO"},
 }
+
+# ---------------------------------------------------------------------------
+# Plateforme (console développeurs)
+# ---------------------------------------------------------------------------
+# Nombre maximum d'établissements clients sur ce déploiement
+PLATEFORME_MAX_ETABLISSEMENTS = config("PLATEFORME_MAX_ETABLISSEMENTS", default=50, cast=int)
+# Code d'invitation de l'inscription privée de l'équipe (/equipe/inscription). Vide = inscription fermée.
+PLATEFORME_CODE_INVITATION = config("PLATEFORME_CODE_INVITATION", default="")
