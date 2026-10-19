@@ -7,6 +7,10 @@ from django.db.models.functions import Lower
 
 
 class UserManager(BaseUserManager):
+    def get_by_natural_key(self, username):
+        # « Ali@Gmail.com » et « ali@gmail.com » désignent le même compte (y compris sur /admin)
+        return self.get(**{f"{self.model.USERNAME_FIELD}__iexact": (username or "").strip()})
+
     def create_user(self, email, password=None, **extra_fields):
         if not email:
             raise ValueError("L'email est obligatoire")

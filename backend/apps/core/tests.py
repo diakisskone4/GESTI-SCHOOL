@@ -1,7 +1,7 @@
 """Tests du cloisonnement multi-établissements (apps/core/tenancy.py)."""
 import datetime
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
 from apps.accounts.models import User
@@ -75,3 +75,30 @@ class CloisonnementEtablissementsTests(TestCase):
         self.assertEqual(client.patch("/api/v1/auth/me/", {"role": "admin"}, format="json").status_code, 400)
         eleve.refresh_from_db()
         self.assertEqual(eleve.role, "eleve")
+
+
+@override_settings(STORAGES={
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+})
+class AssurerSuperutilisateurTests(TestCase):
+    def test_cree_puis_met_a_jour_le_mot_de_passe(self):
+        import os
+        from unittest import mock
+
+        from django.core.management import call_command
+
+        # Un ancien compte « admin » ne doit pas bloquer la création
+        User.objects.create_user(email="ancien@test.ml", password="x", username="admin")
+        with mock.patch.dict(os.environ, {"DJANGO_SUPERUSER_EMAIL": "Chef@Test.ml", "DJANGO_SUPERUSER_PASSWORD": "Premier-mdp-1"}):
+            call_command("assurer_superutilisateur", stdout=open(os.devnull, "w"))
+        chef = User.objects.get(email__iexact="chef@test.ml")
+        self.assertTrue(chef.is_superuser and chef.is_staff and chef.check_password("Premier-mdp-1"))
+        with mock.patch.dict(os.environ, {"DJANGO_SUPERUSER_EMAIL": "chef@test.ml", "DJANGO_SUPERUSER_PASSWORD": "Nouveau-mdp-2"}):
+            call_command("assurer_superutilisateur", stdout=open(os.devnull, "w"))
+        chef.refresh_from_db()
+        self.assertTrue(chef.check_password("Nouveau-mdp-2"))
+        self.assertEqual(User.objects.filter(email__iexact="chef@test.ml").count(), 1)
+        # Connexion réelle à /admin
+        self.assertTrue(self.client.login(email="chef@test.ml", password="Nouveau-mdp-2"))
+        self.assertEqual(self.client.get("/admin/", HTTP_HOST="localhost").status_code, 200)
