@@ -7,6 +7,7 @@ import { useFetch } from "../../hooks/useFetch";
 import { useToast, extractErrorMessage } from "../../context/ToastContext";
 import { useAuth } from "../../context/AuthContext";
 import { plateformeApi } from "../../api/endpoints";
+import { dateHeureFr, depuis } from "./commun";
 
 const VIDE = { first_name: "", last_name: "", email: "", telephone: "", password: "" };
 
@@ -15,6 +16,7 @@ export default function ConsoleEquipe() {
   const { notify } = useToast();
   const { user } = useAuth();
   const { data, loading, reload } = useFetch(() => plateformeApi.equipe.list(), []);
+  const { data: journal, loading: journalEnCours, reload: rechargerJournal } = useFetch(() => plateformeApi.journal.list({ page_size: 100 }), []);
   const membres = data?.results || [];
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -27,6 +29,7 @@ export default function ConsoleEquipe() {
       notify("Membre ajouté à l'équipe.", "success");
       setForm(null);
       reload();
+      rechargerJournal();
     } catch (err) {
       notify(extractErrorMessage(err), "error");
     } finally {
@@ -39,6 +42,7 @@ export default function ConsoleEquipe() {
       await plateformeApi.equipe.update(membre.id, { is_active: !membre.is_active });
       notify(membre.is_active ? "Compte désactivé." : "Compte réactivé.", "success");
       reload();
+      rechargerJournal();
     } catch (err) {
       notify(extractErrorMessage(err), "error");
     }
@@ -60,7 +64,7 @@ export default function ConsoleEquipe() {
         columns={[
           { key: "full_name", header: "Nom", render: (m) => <span className="font-semibold text-slate-800">{m.full_name}{m.id === user?.id && <span className="ml-2 text-xs text-slate-400">(vous)</span>}</span> },
           { key: "email", header: "Email" },
-          { key: "date_derniere_activite", header: "Dernière connexion", render: (m) => (m.date_derniere_activite ? new Date(m.date_derniere_activite).toLocaleString("fr-FR") : "—") },
+          { key: "date_derniere_activite", header: "Dernière connexion", render: (m) => <span title={dateHeureFr(m.date_derniere_activite)}>{depuis(m.date_derniere_activite)}</span> },
           {
             key: "is_active",
             header: "Statut",
@@ -77,6 +81,23 @@ export default function ConsoleEquipe() {
           },
         ]}
       />
+
+      <div>
+        <h2 className="mb-1 text-base font-semibold text-slate-800">Journal de la console</h2>
+        <p className="mb-3 text-sm text-slate-500">Les 100 dernières actions de l'équipe : créations, prolongations, activations, désactivations...</p>
+        <DataTable
+          loading={journalEnCours && !journal}
+          rows={journal?.results || []}
+          empty="Aucune action pour le moment."
+          columns={[
+            { key: "horodatage", header: "Date", render: (a) => <span className="tabular-nums text-slate-500">{dateHeureFr(a.horodatage)}</span> },
+            { key: "auteur_nom", header: "Membre" },
+            { key: "action_label", header: "Action", render: (a) => <span className="font-semibold text-slate-700">{a.action_label}</span> },
+            { key: "etablissement_nom", header: "Établissement", render: (a) => a.etablissement_nom || <span className="text-slate-400">—</span> },
+            { key: "details", header: "Détails", render: (a) => <span className="text-slate-500">{a.details}</span> },
+          ]}
+        />
+      </div>
 
       <Modal
         open={!!form}

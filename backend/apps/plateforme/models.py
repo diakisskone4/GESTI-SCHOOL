@@ -64,3 +64,34 @@ class Abonnement(TimeStampedModel):
         self.duree_mois = duree_mois
         self.actif = True
         self.save()
+
+
+class JournalConsole(models.Model):
+    """Historique des actions de l'équipe dans la console (qui a fait quoi, sur quel établissement)."""
+    ACTION_CHOICES = [
+        ("creation", "Création"), ("modification", "Modification"),
+        ("activation", "Activation"), ("desactivation", "Désactivation"),
+        ("renouvellement", "Prolongation"), ("notes", "Notes internes"),
+        ("administrateur", "Ajout d'administrateur"), ("suppression", "Suppression"),
+        ("equipe", "Équipe"),
+    ]
+
+    auteur = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="actions_console",
+    )
+    # Conservé après suppression de l'établissement : le nom reste lisible dans l'historique
+    etablissement = models.ForeignKey(
+        "core.Etablissement", on_delete=models.SET_NULL, null=True, blank=True, related_name="+",
+    )
+    etablissement_nom = models.CharField(max_length=200, blank=True)
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
+    details = models.CharField(max_length=255, blank=True)
+    horodatage = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-horodatage"]
+        verbose_name = "Action de la console"
+        verbose_name_plural = "Journal de la console"
+
+    def __str__(self):
+        return f"[{self.horodatage:%d/%m/%Y %H:%M}] {self.get_action_display()} — {self.etablissement_nom}"

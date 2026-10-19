@@ -5,7 +5,7 @@ from rest_framework import serializers
 from apps.accounts.doublons import verifier_email_utilisateur, verifier_telephone_utilisateur
 from apps.accounts.models import User
 from apps.core.models import Etablissement
-from apps.plateforme.models import DUREES_MOIS, Abonnement, ajouter_mois
+from apps.plateforme.models import DUREES_MOIS, Abonnement, JournalConsole, ajouter_mois
 
 
 class AbonnementSerializer(serializers.ModelSerializer):
@@ -55,6 +55,7 @@ class EtablissementConsoleSerializer(serializers.ModelSerializer):
     administrateurs = serializers.SerializerMethodField()
     nb_eleves = serializers.IntegerField(read_only=True)
     nb_utilisateurs = serializers.IntegerField(read_only=True)
+    derniere_activite = serializers.DateTimeField(read_only=True)
     # Création uniquement
     duree_mois = serializers.ChoiceField(choices=DUREES_MOIS, write_only=True, required=False)
     administrateur = AdministrateurSerializer(write_only=True, required=False)
@@ -63,7 +64,7 @@ class EtablissementConsoleSerializer(serializers.ModelSerializer):
         model = Etablissement
         fields = [
             "id", "nom", "sigle", "type_etablissement", "adresse", "ville", "pays", "telephone", "email",
-            "created_at", "abonnement", "administrateurs", "nb_eleves", "nb_utilisateurs",
+            "created_at", "abonnement", "administrateurs", "nb_eleves", "nb_utilisateurs", "derniere_activite",
             "duree_mois", "administrateur",
         ]
         read_only_fields = ["id", "created_at"]
@@ -71,8 +72,15 @@ class EtablissementConsoleSerializer(serializers.ModelSerializer):
     def get_administrateurs(self, obj):
         return [
             {"id": str(u.id), "nom": u.get_full_name(), "email": u.email, "telephone": u.telephone, "actif": u.is_active}
-            for u in obj.utilisateurs.filter(role__in=[User.Role.ADMIN, User.Role.SUPERADMIN])
+            for u in self._admins(obj)
         ]
+
+    @staticmethod
+    def _admins(obj):
+        # Préchargés par la vue (to_attr="admins") ; sinon requête directe
+        if hasattr(obj, "admins"):
+            return obj.admins
+        return obj.utilisateurs.filter(role__in=[User.Role.ADMIN, User.Role.SUPERADMIN])
 
     def validate(self, attrs):
         if self.instance is None:
@@ -148,3 +156,15 @@ class InscriptionEquipeSerializer(DeveloppeurSerializer):
             raise serializers.ValidationError({"password_confirm": "Les mots de passe ne correspondent pas."})
         attrs.pop("code_invitation")  # vérifié par la vue
         return attrs
+
+
+class JournalConsoleSerializer(serializers.ModelSerializer):
+    auteur_nom = serializers.SerializerMethodField()
+    action_label = serializers.CharField(source="get_action_display", read_only=True)
+
+    class Meta:
+        model = JournalConsole
+        fields = ["id", "horodatage", "action", "action_label", "auteur_nom", "etablissement", "etablissement_nom", "details"]
+
+    def get_auteur_nom(self, obj):
+        return obj.auteur.get_full_name() if obj.auteur else "Compte supprimé"

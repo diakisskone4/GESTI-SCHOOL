@@ -122,3 +122,69 @@ class ConsoleDeveloppeursTests(TestCase):
         from rest_framework_simplejwt.tokens import RefreshToken
 
         return str(RefreshToken.for_user(user).access_token)
+
+
+class TableauDeBordConsoleTests(TestCase):
+    def setUp(self):
+        self.dev = User.objects.create_user(email="dev2@plateforme.ml", password=MOT_DE_PASSE, role="developpeur",
+                                            first_name="Dev", last_name="Deux")
+        self.console = client_pour(self.dev)
+
+    def creer(self, sigle, duree=12):
+        r = self.console.post("/api/v1/plateforme/etablissements/", {
+            "nom": f"École {sigle}", "sigle": sigle, "duree_mois": duree,
+            "administrateur": {"first_name": "A", "last_name": sigle, "email": f"admin@{sigle.lower()}.ml",
+                               "password": MOT_DE_PASSE},
+        }, format="json")
+        self.assertEqual(r.status_code, 201, r.data)
+        return r.data["id"]
+
+    def test_statistiques_completes(self):
+        a, b, c = self.creer("AAA", 3), self.creer("BBB", 24), self.creer("CCC")
+        Abonnement.objects.filter(etablissement_id=b).update(date_fin=datetime.date.today() + datetime.timedelta(days=10))
+        Abonnement.objects.filter(etablissement_id=c).update(date_fin=datetime.date.today() - datetime.timedelta(days=2))
+        stats = self.console.get("/api/v1/plateforme/statistiques/").data
+        self.assertEqual(stats["par_statut"]["actif"], 2)
+        self.assertEqual(stats["par_statut"]["expire"], 1)
+        self.assertEqual(stats["a_renouveler"], 1)
+        self.assertEqual(len(stats["evolution"]), 12)
+        self.assertEqual(stats["evolution"][-1]["nouveaux"], 3)
+        self.assertEqual(stats["evolution"][-1]["total"], 3)
+        self.assertEqual({l["id"] for l in stats["echeancier"]}, {b, c})
+        # Aucun administrateur ne s'est encore connecté : les établissements actifs sont « sans activité »
+        self.assertEqual({l["id"] for l in stats["inactifs"]}, {a, b})
+        self.assertEqual(stats["activite_recente"][0]["action"], "creation")
+
+    def test_filtre_par_statut_et_journal(self):
+        a, b = self.creer("AAA"), self.creer("BBB")
+        self.console.post(f"/api/v1/plateforme/etablissements/{b}/desactiver/", {"motif": "Impayé"}, format="json")
+        ids = lambda statut: [e["id"] for e in self.console.get(
+            "/api/v1/plateforme/etablissements/", {"statut": statut}).data["results"]]
+        self.assertEqual(ids("actif"), [a])
+        self.assertEqual(ids("suspendu"), [b])
+        self.assertEqual(self.console.get("/api/v1/plateforme/etablissements/", {"statut": "x"}).status_code, 400)
+        historique = self.console.get(f"/api/v1/plateforme/etablissements/{b}/historique/").data
+        self.assertEqual([h["action"] for h in historique], ["desactivation", "creation"])
+        self.assertEqual(historique[0]["details"], "Impayé")
+        self.assertEqual(historique[0]["auteur_nom"], "Dev Deux")
+
+    def test_renouvellement_duree_invalide(self):
+        a = self.creer("AAA")
+        r = self.console.post(f"/api/v1/plateforme/etablissements/{a}/renouveler/", {"duree_mois": "abc"}, format="json")
+        self.assertEqual(r.status_code, 400)
+
+
+class TriConsoleTests(TestCase):
+    def test_tri_par_activite_met_les_jamais_connectes_a_la_fin(self):
+        from django.utils import timezone
+
+        dev = User.objects.create_user(email="dev3@plateforme.ml", password=MOT_DE_PASSE, role="developpeur")
+        console = client_pour(dev)
+        jamais, _, _ = creer_etablissement("JAM")
+        actif, _, _ = creer_etablissement("ACT")
+        admin = User.objects.create_user(email="a@act.ml", password="x", role="admin", date_derniere_activite=timezone.now())
+        admin.etablissements.add(actif)
+        sigles = [e["sigle"] for e in console.get("/api/v1/plateforme/etablissements/", {"ordering": "-derniere_activite"}).data["results"]]
+        self.assertEqual(sigles, ["ACT", "JAM"])
+        sigles = [e["sigle"] for e in console.get("/api/v1/plateforme/etablissements/", {"ordering": "-nb_eleves", "search": "JAM"}).data["results"]]
+        self.assertEqual(sigles, ["JAM"])
