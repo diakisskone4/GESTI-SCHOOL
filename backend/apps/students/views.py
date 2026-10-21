@@ -5,11 +5,11 @@ from django.shortcuts import get_object_or_404
 from rest_framework import mixins, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
-from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.core.pdf_utils import generer_carte_scolaire_pdf
+from apps.core.pagination import PaginationAjustable
 from apps.core.permissions import IsAdmin, IsAdminOrReadOnly, IsAdminOuSurveillant
 from apps.students.archives import archiver_apres_operation, creer_archive, creer_archive_etablissement, donnees_eleve
 from apps.students.exports import classeur_eleves, nom_fichier_excel
@@ -27,13 +27,6 @@ from apps.core.tenancy import (
 )
 
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-
-
-class PaginationAjustable(PageNumberPagination):
-    """25 lignes par défaut ; ?page_size= permet d'en afficher davantage (500 au maximum)."""
-    page_size = 25
-    page_size_query_param = "page_size"
-    max_page_size = 500
 
 
 def _etablissement_cible(request):

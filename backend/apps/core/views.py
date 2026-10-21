@@ -34,6 +34,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny
 
 from apps.core.images import contenu_image, type_mime
+from apps.core.pagination import PaginationListeDeReference
 from apps.core.tenancy import EtablissementScopedMixin, etablissements_accessibles, etablissements_famille_ids
 
 
@@ -153,9 +154,11 @@ class ClasseViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
 
 class MatiereViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
     etablissement_field = "etablissement"
-    queryset = Matiere.objects.all()
+    # Ordre d'ajout : les 200 premières matières ajoutées sont renvoyées par défaut (?page_size= jusqu'à 500)
+    queryset = Matiere.objects.order_by("created_at", "id")
     serializer_class = MatiereSerializer
     permission_classes = [IsAdminOrReadOnly]
+    pagination_class = PaginationListeDeReference
     filterset_fields = ["etablissement"]
     search_fields = ["nom", "code"]
 

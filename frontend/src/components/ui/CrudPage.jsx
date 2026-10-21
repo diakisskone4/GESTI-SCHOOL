@@ -129,6 +129,14 @@ export default function CrudPage({ title, subtitle, apiResource, fields, columns
 
       <DataTable columns={[...cols, actionCol]} rows={rows} loading={loading} />
 
+      {/* Liste paginée par le serveur : on signale quand tout n'est pas affiché */}
+      {typeof data?.count === "number" && data.count > rows.length && (
+        <p className="mt-3 text-xs text-slate-500">
+          <strong className="tabular-nums text-slate-700">{rows.length}</strong> premier(s) affiché(s) sur{" "}
+          <strong className="tabular-nums text-slate-700">{data.count}</strong>.
+        </p>
+      )}
+
       <Modal
         open={modalOpen}
         onClose={() => setModalOpen(false)}

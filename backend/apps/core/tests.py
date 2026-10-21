@@ -5,7 +5,7 @@ from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
 from apps.accounts.models import User
-from apps.core.models import AnneeScolaire, Classe, Etablissement, Niveau
+from apps.core.models import AnneeScolaire, Classe, Etablissement, Matiere, Niveau
 from apps.students.models import Eleve, Inscription
 
 
@@ -102,3 +102,19 @@ class AssurerSuperutilisateurTests(TestCase):
         # Connexion réelle à /admin
         self.assertTrue(self.client.login(email="chef@test.ml", password="Nouveau-mdp-2"))
         self.assertEqual(self.client.get("/admin/", HTTP_HOST="localhost").status_code, 200)
+
+
+class ListeMatieresTests(TestCase):
+    def test_les_200_premieres_matieres_ajoutees(self):
+        etab, _, _ = creer_etablissement("MAT")
+        Matiere.objects.bulk_create([Matiere(etablissement=etab, nom=f"Matière {i:03d}") for i in range(230)])
+        admin = User.objects.create_user(email="m@mat.ml", password="x", role="admin", etablissement_courant=etab)
+        admin.etablissements.add(etab)
+        client = APIClient(HTTP_HOST="localhost")
+        client.force_authenticate(admin)
+        r = client.get("/api/v1/matieres/", {"etablissement": etab.id})
+        self.assertEqual(r.data["count"], 230)
+        self.assertEqual(len(r.data["results"]), 200)
+        self.assertEqual(r.data["results"][0]["nom"], "Matière 000")  # ordre d'ajout
+        self.assertEqual(r.data["results"][-1]["nom"], "Matière 199")
+        self.assertEqual(len(client.get("/api/v1/matieres/", {"page_size": 500}).data["results"]), 230)
