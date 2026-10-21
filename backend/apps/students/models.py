@@ -180,7 +180,10 @@ class ArchiveEleves(models.Model):
     Le ZIP est stocké en base de données : sur les hébergements sans disque persistant (Render gratuit),
     les fichiers écrits sur le disque disparaissent à chaque redéploiement. Voir apps/students/archives.py.
     """
+    PORTEE_CHOICES = [("eleves", "Données élèves"), ("etablissement", "Établissement complet")]
+
     etablissement = models.ForeignKey("core.Etablissement", on_delete=models.CASCADE, related_name="archives_eleves")
+    portee = models.CharField(max_length=15, choices=PORTEE_CHOICES, default="eleves", db_index=True)
     auteur = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
     cree_le = models.DateTimeField(auto_now_add=True, db_index=True)
     modifie_le = models.DateTimeField(auto_now=True)

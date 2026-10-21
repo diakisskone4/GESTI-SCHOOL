@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 from apps.core.views import (
     AnneeScolaireViewSet,
     ClasseViewSet,
+    CorbeilleViewSet,
     CreneauEmploiDuTempsViewSet,
     EtablissementViewSet,
     JournalActiviteViewSet,
@@ -22,5 +23,6 @@ router.register(r"classes", ClasseViewSet, basename="classe")
 router.register(r"matieres", MatiereViewSet, basename="matiere")
 router.register(r"emplois-du-temps", CreneauEmploiDuTempsViewSet, basename="creneau-edt")
 router.register(r"journal-activite", JournalActiviteViewSet, basename="journal-activite")
+router.register(r"corbeille", CorbeilleViewSet, basename="corbeille")
 
 urlpatterns = router.urls

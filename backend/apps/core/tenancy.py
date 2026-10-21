@@ -188,3 +188,26 @@ class EtablissementScopedMixin:
             if not self._dans_le_perimetre(modele, pk):
                 raise PermissionDenied("Vous ne pouvez pas déplacer ces données vers un autre établissement.")
         return response
+
+    def _etablissement_de(self, instance):
+        """Établissement auquel appartient l'objet, en suivant `etablissement_field` (ex. inscription__eleve__etablissement)."""
+        chemins = self.etablissement_field if isinstance(self.etablissement_field, (tuple, list)) else (self.etablissement_field,)
+        for chemin in chemins:
+            objet = instance
+            for morceau in chemin.split("__"):
+                objet = getattr(objet, morceau, None)
+                if objet is None:
+                    break
+            if objet is not None:
+                return getattr(objet, "pk", objet)
+        return None
+
+    def destroy(self, request, *args, **kwargs):
+        """Suppression avec mise à la corbeille (restaurable) : voir apps/core/corbeille.py."""
+        from apps.core.corbeille import mettre_a_la_corbeille
+
+        instance = self.get_object()
+        actif = etablissement_actif_id(request.user)
+        etablissement_id = actif if actif not in (None, -1) else self._etablissement_de(instance)
+        mettre_a_la_corbeille(instance, etablissement_id, request.user, lambda: self.perform_destroy(instance))
+        return Response(status=status.HTTP_204_NO_CONTENT)

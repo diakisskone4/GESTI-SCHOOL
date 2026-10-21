@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, School, Users, GraduationCap, BookOpenCheck,
   FileText, Wallet, Banknote, MessageSquare, BarChart3, CalendarClock,
-  ClipboardList, IdCard, Megaphone, Calendar, Layers, Link2, UserCog,
+  ClipboardList, IdCard, Megaphone, Calendar, Layers, Link2, UserCog, Archive, Trash2,
 } from "lucide-react";
 
 /** Menu de navigation par rôle. Chaque item : { label, to, icon, roles? } */
@@ -42,6 +42,13 @@ export const NAV_SECTIONS = [
       { label: "Messagerie", to: "/messages", icon: MessageSquare },
       { label: "Annonces", to: "/annonces", icon: Megaphone },
       { label: "Statistiques", to: "/statistiques", icon: BarChart3, roles: ["admin", "superadmin"] },
+    ],
+  },
+  {
+    title: "Données",
+    items: [
+      { label: "Archives", to: "/archives", icon: Archive, roles: ["admin", "superadmin"] },
+      { label: "Corbeille", to: "/corbeille", icon: Trash2, roles: ["admin", "superadmin"] },
     ],
   },
 ];

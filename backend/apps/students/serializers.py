@@ -81,7 +81,7 @@ class ArchiveElevesSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ArchiveEleves
-        fields = ["id", "cree_le", "modifie_le", "auteur_nom", "operations", "nb_eleves", "nom_fichier", "taille"]
+        fields = ["id", "portee", "cree_le", "modifie_le", "auteur_nom", "operations", "nb_eleves", "nom_fichier", "taille"]
 
     def get_auteur_nom(self, obj):
         return obj.auteur.get_full_name() if obj.auteur else "—"

@@ -1,4 +1,4 @@
-from rest_framework import viewsets
+from rest_framework import mixins, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -7,6 +7,7 @@ from apps.core.models import (
     AnneeScolaire,
     Classe,
     CreneauEmploiDuTemps,
+    ElementSupprime,
     Etablissement,
     JournalActivite,
     Matiere,
@@ -19,6 +20,7 @@ from apps.core.serializers import (
     AnneeScolaireSerializer,
     ClasseSerializer,
     CreneauEmploiDuTempsSerializer,
+    ElementSupprimeSerializer,
     EtablissementSerializer,
     JournalActiviteSerializer,
     MatiereSerializer,
@@ -175,3 +177,46 @@ class JournalActiviteViewSet(EtablissementScopedMixin, viewsets.ReadOnlyModelVie
     permission_classes = [IsAdmin]
     filterset_fields = ["action", "utilisateur", "etablissement"]
     search_fields = ["description", "modele"]
+
+
+class CorbeilleViewSet(EtablissementScopedMixin, mixins.ListModelMixin, mixins.DestroyModelMixin, viewsets.GenericViewSet):
+    """Corbeille de l'établissement actif : éléments supprimés, restaurables pendant CORBEILLE_DUREE_JOURS jours.
+    DELETE /corbeille/<id>/ supprime définitivement l'élément (sans possibilité de retour)."""
+    etablissement_field = "etablissement"
+    queryset = ElementSupprime.objects.select_related("supprime_par").defer("donnees")
+    serializer_class = ElementSupprimeSerializer
+    permission_classes = [IsAdmin]
+    filterset_fields = ["modele"]
+    search_fields = ["libelle", "type_objet"]
+
+    def list(self, request, *args, **kwargs):
+        from apps.core.corbeille import purger_expires
+        from apps.core.tenancy import etablissement_actif_id
+
+        actif = etablissement_actif_id(request.user)
+        if actif not in (None, -1):
+            purger_expires(actif)
+        return super().list(request, *args, **kwargs)
+
+    @action(detail=True, methods=["post"])
+    def restaurer(self, request, pk=None):
+        from apps.core.corbeille import restaurer
+
+        element = self.get_queryset().defer(None).get(pk=self.get_object().pk)
+        libelle, type_objet, nb = element.libelle, element.type_objet, element.nb_objets
+        restaurer(element)
+        if element.modele.startswith("students."):
+            from apps.students.archives import archiver_apres_operation
+
+            archiver_apres_operation(element.etablissement_id, request.user, "restauration",
+                                     f"Restauration depuis la corbeille : {type_objet} « {libelle} »")
+        detail = f"{type_objet} « {libelle} » restauré"
+        if nb > 1:
+            detail += f" avec {nb - 1} élément(s) lié(s)"
+        return Response({"detail": detail + "."})
+
+    @action(detail=False, methods=["post"])
+    def vider(self, request):
+        """Supprime définitivement tout le contenu de la corbeille de l'établissement actif."""
+        nombre, _ = self.filter_queryset(self.get_queryset()).delete()
+        return Response({"detail": f"Corbeille vidée ({nombre} élément(s) supprimé(s) définitivement)."})

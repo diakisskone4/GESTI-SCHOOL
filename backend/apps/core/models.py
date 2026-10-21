@@ -166,6 +166,7 @@ class Niveau(TimeStampedModel):
     class Meta:
         ordering = ["etablissement", "ordre"]
         unique_together = ("etablissement", "nom")
+        verbose_name_plural = "Niveaux"
 
     def __str__(self):
         return self.nom
@@ -275,3 +276,29 @@ class JournalActivite(models.Model):
 
     def __str__(self):
         return f"[{self.horodatage:%Y-%m-%d %H:%M}] {self.utilisateur} - {self.get_action_display()}"
+
+
+class ElementSupprime(models.Model):
+    """Corbeille : instantané complet d'un élément supprimé (et de tout ce qui a été supprimé avec lui
+    en cascade), pour pouvoir le restaurer à l'identique. Voir apps/core/corbeille.py."""
+    etablissement = models.ForeignKey(Etablissement, on_delete=models.CASCADE, related_name="corbeille")
+    supprime_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
+    supprime_le = models.DateTimeField(auto_now_add=True, db_index=True)
+    modele = models.CharField(max_length=100, help_text="Ex: students.eleve")
+    type_objet = models.CharField(max_length=100, help_text="Ex: Élève")
+    objet_pk = models.CharField(max_length=64)
+    libelle = models.CharField(max_length=255)
+    nb_objets = models.PositiveIntegerField(default=1, help_text="Élément + éléments supprimés avec lui")
+    resume = models.JSONField(default=dict, help_text="Nombre d'éléments supprimés par type")
+    donnees = models.TextField(help_text="Objets sérialisés (format JSON de Django)")
+    liens = models.JSONField(default=list, help_text="Références remises à vide (SET_NULL) à rétablir")
+
+    class Meta:
+        ordering = ["-supprime_le"]
+        verbose_name = "Élément de la corbeille"
+        verbose_name_plural = "Corbeille"
+
+    def __str__(self):
+        return f"{self.type_objet} « {self.libelle} » supprimé le {self.supprime_le:%d/%m/%Y}"

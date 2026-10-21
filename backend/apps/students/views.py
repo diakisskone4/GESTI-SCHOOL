@@ -11,7 +11,7 @@ from rest_framework.response import Response
 
 from apps.core.pdf_utils import generer_carte_scolaire_pdf
 from apps.core.permissions import IsAdmin, IsAdminOrReadOnly, IsAdminOuSurveillant
-from apps.students.archives import archiver_apres_operation, creer_archive, donnees_eleve
+from apps.students.archives import archiver_apres_operation, creer_archive, creer_archive_etablissement, donnees_eleve
 from apps.students.exports import classeur_eleves, nom_fichier_excel
 from apps.students.models import Absence, ArchiveEleves, CarteScolaire, Eleve, Inscription, SanctionRecompense
 from apps.students.serializers import (
@@ -175,6 +175,7 @@ class ArchiveElevesViewSet(EtablissementScopedMixin, mixins.ListModelMixin, view
     serializer_class = ArchiveElevesSerializer
     permission_classes = [IsAdmin]
     pagination_class = PaginationAjustable
+    filterset_fields = ["portee"]
 
     @action(detail=True, methods=["get"])
     def telecharger(self, request, pk=None):
@@ -187,7 +188,10 @@ class ArchiveElevesViewSet(EtablissementScopedMixin, mixins.ListModelMixin, view
     def creer(self, request):
         """« Archiver maintenant » : archive complète immédiate, indépendante des opérations."""
         etablissement = _etablissement_cible(request)
-        archive = creer_archive(etablissement, request.user, "manuelle", "Archive créée à la demande", regrouper=False)
+        if request.data.get("portee") == "etablissement":
+            archive = creer_archive_etablissement(etablissement, request.user)
+        else:
+            archive = creer_archive(etablissement, request.user, "manuelle", "Archive créée à la demande", regrouper=False)
         return Response(self.get_serializer(archive).data, status=201)
 
 

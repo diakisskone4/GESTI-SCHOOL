@@ -226,6 +226,10 @@ MATRICULE_PREFIX = config("MATRICULE_PREFIX", default="GS")
 
 # Archives ZIP des données élèves : nombre d'archives conservées par établissement (apps/students/archives.py)
 ARCHIVES_ELEVES_MAX = config("ARCHIVES_ELEVES_MAX", default=50, cast=int)
+# Archives complètes de l'établissement (bouton « Archiver tout l'établissement ») conservées
+ARCHIVES_ETABLISSEMENT_MAX = config("ARCHIVES_ETABLISSEMENT_MAX", default=10, cast=int)
+# Corbeille : durée de conservation des éléments supprimés avant effacement définitif (jours)
+CORBEILLE_DUREE_JOURS = config("CORBEILLE_DUREE_JOURS", default=30, cast=int)
 
 # Fournisseur SMS (à brancher : Orange, Twilio, etc.)
 SMS_BACKEND = config("SMS_BACKEND", default="console")

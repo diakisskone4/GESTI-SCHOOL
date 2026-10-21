@@ -1,11 +1,10 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, IdCard, Pencil, Trash2, Loader2, Eye, Filter, Camera, User, School, FileSpreadsheet, Archive } from "lucide-react";
+import { Plus, IdCard, Pencil, Trash2, Loader2, Eye, Filter, Camera, User, Users, School, FileSpreadsheet } from "lucide-react";
 import PageHeader from "../../components/ui/PageHeader";
 import DataTable from "../../components/ui/DataTable";
 import Modal from "../../components/ui/Modal";
 import Pagination, { TAILLES_PAGE } from "../../components/ui/Pagination";
-import ArchivesElevesModal from "./ArchivesElevesModal";
 import { useFetch } from "../../hooks/useFetch";
 import { useAuth } from "../../context/AuthContext";
 import { useToast, extractErrorMessage } from "../../context/ToastContext";
@@ -49,7 +48,6 @@ export default function ElevesPage() {
       return 25;
     }
   });
-  const [archivesOuvertes, setArchivesOuvertes] = useState(false);
   const [exportEnCours, setExportEnCours] = useState(false);
 
   // Recherche lancée 300 ms après la dernière frappe, en revenant à la première page
@@ -73,6 +71,15 @@ export default function ElevesPage() {
     [etablissementId, search, selectedClasseFilter, page, taillePage]
   );
   const totalEleves = data?.count ?? 0;
+
+  // Total de l'établissement, indépendant de la recherche, du filtre et de la page (recalculé après chaque opération)
+  const { data: effectif } = useFetch(
+    () => Promise.all([
+      elevesApi.list({ etablissement: etablissementId, page_size: 1 }),
+      elevesApi.list({ etablissement: etablissementId, classe: "aucune", page_size: 1 }),
+    ]).then(([tous, sansClasse]) => ({ total: tous.count, sansClasse: sansClasse.count })),
+    [etablissementId, data]
+  );
 
   // Après une suppression, la dernière page peut devenir vide : on revient à la précédente
   useEffect(() => {
@@ -277,18 +284,31 @@ export default function ElevesPage() {
   return (
     <div>
       <PageHeader
-        title="Élèves"
+        title={
+          <span className="flex flex-wrap items-center gap-3">
+            Élèves
+            {effectif && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1 text-sm font-semibold text-brand-700">
+                <Users size={15} />
+                <span className="tabular-nums">{effectif.total.toLocaleString("fr-FR")}</span>
+                élève{effectif.total > 1 ? "s" : ""} inscrit{effectif.total > 1 ? "s" : ""}
+              </span>
+            )}
+            {effectif?.sansClasse > 0 && (
+              <button
+                type="button"
+                onClick={() => { setSelectedClasseFilter("aucune"); setPage(1); }}
+                className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 hover:bg-amber-100"
+                title="Afficher les élèves sans classe"
+              >
+                dont {effectif.sansClasse} sans classe
+              </button>
+            )}
+          </span>
+        }
         subtitle="Gestion des inscriptions, profils scolaires et impression des cartes d'identité scolaire."
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <button onClick={exporterExcel} disabled={exportEnCours} className="btn-secondary"
-              title={classeExport ? `Liste des élèves de ${classeExport.nom}` : "Toutes les classes, un onglet par classe"}>
-              {exportEnCours ? <Loader2 size={16} className="animate-spin" /> : <FileSpreadsheet size={16} />}
-              {classeExport ? `Excel : ${classeExport.nom}` : "Excel (toutes les classes)"}
-            </button>
-            <button onClick={() => setArchivesOuvertes(true)} className="btn-secondary" title="Archives ZIP des données élèves">
-              <Archive size={16} /> Archives
-            </button>
             <button
               onClick={() => navigate("/cartes-scolaires")}
               className="btn-secondary"
@@ -327,10 +347,21 @@ export default function ElevesPage() {
           </div>
         </div>
 
-        <div className="text-xs text-slate-500">
-          <strong className="tabular-nums text-slate-700">{elevesList.length}</strong> affiché(s) sur{" "}
-          <strong className="tabular-nums text-slate-700">{totalEleves}</strong> élève(s)
-          {classeExport ? ` en ${classeExport.nom}` : selectedClasseFilter === "aucune" ? " sans classe" : ""}
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-xs text-slate-500">
+            <strong className="tabular-nums text-slate-700">{elevesList.length}</strong> affiché(s) sur{" "}
+            <strong className="tabular-nums text-slate-700">{totalEleves}</strong> élève(s)
+            {classeExport ? ` en ${classeExport.nom}` : selectedClasseFilter === "aucune" ? " sans classe" : ""}
+          </span>
+          <button
+            onClick={exporterExcel}
+            disabled={exportEnCours}
+            className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+            title={classeExport ? `Télécharger la liste des élèves de ${classeExport.nom}` : "Télécharger toutes les classes (un onglet par classe)"}
+          >
+            {exportEnCours ? <Loader2 size={14} className="animate-spin" /> : <FileSpreadsheet size={14} />}
+            {classeExport ? `Excel : ${classeExport.nom}` : "Télécharger en Excel"}
+          </button>
         </div>
       </div>
 
@@ -451,8 +482,6 @@ export default function ElevesPage() {
           chargement={loading}
         />
       </div>
-
-      <ArchivesElevesModal open={archivesOuvertes} onClose={() => setArchivesOuvertes(false)} />
 
       {/* --- MODAL AFFECTATION À UNE CLASSE --- */}
       <Modal

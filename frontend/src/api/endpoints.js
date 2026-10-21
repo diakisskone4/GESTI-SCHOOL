@@ -45,8 +45,14 @@ export const elevesApi = {
 };
 export const archivesElevesApi = {
   list: (params) => api.get("/archives-eleves/", { params }).then((r) => r.data),
-  creer: () => api.post("/archives-eleves/creer/").then((r) => r.data),
+  creer: (portee = "eleves") => api.post("/archives-eleves/creer/", { portee }).then((r) => r.data),
   telechargerPath: (id) => `/archives-eleves/${id}/telecharger/`,
+};
+export const corbeilleApi = {
+  list: (params) => api.get("/corbeille/", { params }).then((r) => r.data),
+  restaurer: (id) => api.post(`/corbeille/${id}/restaurer/`).then((r) => r.data),
+  supprimer: (id) => api.delete(`/corbeille/${id}/`),
+  vider: () => api.post("/corbeille/vider/").then((r) => r.data),
 };
 export const inscriptionsApi = resource("/inscriptions");
 export const absencesApi = resource("/absences");

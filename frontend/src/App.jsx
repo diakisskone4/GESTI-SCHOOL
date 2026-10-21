@@ -29,6 +29,8 @@ import AnnoncesPage from "./pages/communication/AnnoncesPage";
 import StatistiquesPage from "./pages/reporting/StatistiquesPage";
 import ProfilePage from "./pages/profile/ProfilePage";
 import UtilisateursPage from "./pages/accounts/UtilisateursPage";
+import ArchivesPage from "./pages/donnees/ArchivesPage";
+import CorbeillePage from "./pages/donnees/CorbeillePage";
 import AccesSuspendu from "./pages/auth/AccesSuspendu";
 
 // Console de l'équipe développeurs : chargée à part, jamais incluse dans le code des établissements
@@ -86,6 +88,8 @@ export default function App() {
                   <Route path="/cartes-scolaires" element={<CartesScolairesPage />} />
                   <Route path="/documents" element={<DocumentsPage />} />
                   <Route path="/statistiques" element={<StatistiquesPage />} />
+                  <Route path="/archives" element={<ArchivesPage />} />
+                  <Route path="/corbeille" element={<CorbeillePage />} />
                 </Route>
 
                 <Route element={<ProtectedRoute roles={ACADEMIC_ROLES} />}>

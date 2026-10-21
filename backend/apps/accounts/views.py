@@ -196,6 +196,16 @@ class UserViewSet(viewsets.ModelViewSet):
         if refuses:
             raise PermissionDenied(f"Vous ne gérez pas ces établissements : {', '.join(refuses)}.")
 
+    def destroy(self, request, *args, **kwargs):
+        """Suppression d'un compte avec mise à la corbeille (restaurable)."""
+        from apps.core.corbeille import mettre_a_la_corbeille
+
+        instance = self.get_object()
+        actif = etablissement_actif_id(request.user)
+        etablissement_id = actif if actif not in (None, -1) else instance.etablissement_courant_id
+        mettre_a_la_corbeille(instance, etablissement_id, request.user, lambda: self.perform_destroy(instance))
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
     def perform_create(self, serializer):
         import secrets
         self._verifier_role(serializer.validated_data.get("role"))

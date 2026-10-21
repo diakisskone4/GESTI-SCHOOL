@@ -4,6 +4,7 @@ from apps.core.models import (
     AnneeScolaire,
     Classe,
     CreneauEmploiDuTemps,
+    ElementSupprime,
     Etablissement,
     JournalActivite,
     Matiere,
@@ -104,3 +105,22 @@ class JournalActiviteSerializer(serializers.ModelSerializer):
         model = JournalActivite
         fields = "__all__"
         read_only_fields = fields
+
+
+class ElementSupprimeSerializer(serializers.ModelSerializer):
+    supprime_par_nom = serializers.SerializerMethodField()
+    expire_le = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ElementSupprime
+        fields = ["id", "supprime_le", "supprime_par_nom", "modele", "type_objet", "libelle", "nb_objets", "resume", "expire_le"]
+
+    def get_supprime_par_nom(self, obj):
+        return obj.supprime_par.get_full_name() if obj.supprime_par else "—"
+
+    def get_expire_le(self, obj):
+        import datetime
+
+        from apps.core.corbeille import duree_conservation
+
+        return obj.supprime_le + datetime.timedelta(days=duree_conservation())
