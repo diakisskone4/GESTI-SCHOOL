@@ -171,3 +171,29 @@ class CarteScolaire(TimeStampedModel):
         if not self.qr_code_data:
             self.qr_code_data = str(self.inscription.eleve.id)
         super().save(*args, **kwargs)
+
+
+class ArchiveEleves(models.Model):
+    """Archive ZIP des données élèves d'un établissement, créée automatiquement après chaque opération
+    (inscription, modification, changement de classe, suppression) ou à la demande.
+
+    Le ZIP est stocké en base de données : sur les hébergements sans disque persistant (Render gratuit),
+    les fichiers écrits sur le disque disparaissent à chaque redéploiement. Voir apps/students/archives.py.
+    """
+    etablissement = models.ForeignKey("core.Etablissement", on_delete=models.CASCADE, related_name="archives_eleves")
+    auteur = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
+    cree_le = models.DateTimeField(auto_now_add=True, db_index=True)
+    modifie_le = models.DateTimeField(auto_now=True)
+    operations = models.JSONField(default=list, help_text="Opérations couvertes : [{date, type, description}]")
+    nb_eleves = models.PositiveIntegerField(default=0)
+    nom_fichier = models.CharField(max_length=150)
+    taille = models.PositiveIntegerField(default=0)
+    contenu = models.BinaryField()
+
+    class Meta:
+        ordering = ["-cree_le"]
+        verbose_name = "Archive des élèves"
+        verbose_name_plural = "Archives des élèves"
+
+    def __str__(self):
+        return f"{self.nom_fichier} ({self.etablissement})"

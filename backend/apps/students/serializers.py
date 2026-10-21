@@ -2,7 +2,7 @@ from rest_framework import serializers
 
 from apps.accounts.doublons import verifier_eleve_unique
 
-from apps.students.models import Absence, CarteScolaire, Eleve, Inscription, SanctionRecompense
+from apps.students.models import Absence, ArchiveEleves, CarteScolaire, Eleve, Inscription, SanctionRecompense
 
 
 class EleveSerializer(serializers.ModelSerializer):
@@ -29,7 +29,11 @@ class EleveSerializer(serializers.ModelSerializer):
         return attrs
 
     def get_classe_actuelle(self, obj):
-        insc = obj.inscription_courante
+        # Inscriptions actives préchargées par la vue : une seule requête pour toute la page
+        if hasattr(obj, "inscriptions_actives"):
+            insc = obj.inscriptions_actives[0] if obj.inscriptions_actives else None
+        else:
+            insc = obj.inscription_courante
         return insc.classe.nom if insc else None
 
 
@@ -70,3 +74,14 @@ class CarteScolaireSerializer(serializers.ModelSerializer):
         model = CarteScolaire
         fields = "__all__"
         read_only_fields = ["id", "numero_carte", "date_emission", "fichier_pdf", "qr_code_data"]
+
+
+class ArchiveElevesSerializer(serializers.ModelSerializer):
+    auteur_nom = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ArchiveEleves
+        fields = ["id", "cree_le", "modifie_le", "auteur_nom", "operations", "nb_eleves", "nom_fichier", "taille"]
+
+    def get_auteur_nom(self, obj):
+        return obj.auteur.get_full_name() if obj.auteur else "—"

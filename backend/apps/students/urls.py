@@ -2,6 +2,7 @@ from rest_framework.routers import DefaultRouter
 
 from apps.students.views import (
     AbsenceViewSet,
+    ArchiveElevesViewSet,
     CarteScolaireViewSet,
     EleveViewSet,
     InscriptionViewSet,
@@ -14,5 +15,6 @@ router.register(r"inscriptions", InscriptionViewSet, basename="inscription")
 router.register(r"absences", AbsenceViewSet, basename="absence")
 router.register(r"sanctions-recompenses", SanctionRecompenseViewSet, basename="sanction-recompense")
 router.register(r"cartes-scolaires", CarteScolaireViewSet, basename="carte-scolaire")
+router.register(r"archives-eleves", ArchiveElevesViewSet, basename="archive-eleves")
 
 urlpatterns = router.urls

@@ -1,9 +1,11 @@
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, IdCard, Pencil, Trash2, Download, Loader2, Eye, Filter, Camera, User, School } from "lucide-react";
+import { Plus, IdCard, Pencil, Trash2, Loader2, Eye, Filter, Camera, User, School, FileSpreadsheet, Archive } from "lucide-react";
 import PageHeader from "../../components/ui/PageHeader";
 import DataTable from "../../components/ui/DataTable";
 import Modal from "../../components/ui/Modal";
+import Pagination, { TAILLES_PAGE } from "../../components/ui/Pagination";
+import ArchivesElevesModal from "./ArchivesElevesModal";
 import { useFetch } from "../../hooks/useFetch";
 import { useAuth } from "../../context/AuthContext";
 import { useToast, extractErrorMessage } from "../../context/ToastContext";
@@ -35,13 +37,47 @@ export default function ElevesPage() {
   const navigate = useNavigate();
   const etablissementId = user?.etablissement_courant;
 
+  const [saisie, setSaisie] = useState("");
   const [search, setSearch] = useState("");
   const [selectedClasseFilter, setSelectedClasseFilter] = useState("");
+  const [page, setPage] = useState(1);
+  const [taillePage, setTaillePage] = useState(() => {
+    try {
+      const memorisee = Number(localStorage.getItem("gs_eleves_par_page"));
+      return TAILLES_PAGE.includes(memorisee) ? memorisee : 25;
+    } catch {
+      return 25;
+    }
+  });
+  const [archivesOuvertes, setArchivesOuvertes] = useState(false);
+  const [exportEnCours, setExportEnCours] = useState(false);
 
+  // Recherche lancée 300 ms après la dernière frappe, en revenant à la première page
+  useEffect(() => {
+    const t = setTimeout(() => { setSearch(saisie.trim()); setPage(1); }, 300);
+    return () => clearTimeout(t);
+  }, [saisie]);
+
+  const changerTaillePage = (taille) => {
+    setTaillePage(taille);
+    setPage(1);
+    try { localStorage.setItem("gs_eleves_par_page", String(taille)); } catch { /* préférence non mémorisée */ }
+  };
+
+  // Recherche, filtre par classe et pagination faits par le serveur : le compteur porte sur TOUS les élèves
   const { data, loading, reload } = useFetch(
-    () => elevesApi.list({ etablissement: etablissementId, search }),
-    [etablissementId, search]
+    () => elevesApi.list({
+      etablissement: etablissementId, search: search || undefined,
+      classe: selectedClasseFilter || undefined, page, page_size: taillePage,
+    }),
+    [etablissementId, search, selectedClasseFilter, page, taillePage]
   );
+  const totalEleves = data?.count ?? 0;
+
+  // Après une suppression, la dernière page peut devenir vide : on revient à la précédente
+  useEffect(() => {
+    if (data && data.results?.length === 0 && page > 1) setPage(page - 1);
+  }, [data, page]);
   const { data: classesData } = useFetch(() => classesApi.list({ etablissement: etablissementId }), [etablissementId]);
   const classes = classesData?.results || [];
 
@@ -115,11 +151,20 @@ export default function ElevesPage() {
     setPhotoPreview(URL.createObjectURL(file));
   };
 
-  // Filtrage côté client si classe sélectionnée
-  const elevesList = (data?.results || []).filter((el) => {
-    if (!selectedClasseFilter) return true;
-    return el.classe_actuelle === trouverClasse(selectedClasseFilter)?.nom;
-  });
+  const elevesList = data?.results || [];
+  const classeExport = trouverClasse(selectedClasseFilter);
+
+  const exporterExcel = async () => {
+    setExportEnCours(true);
+    try {
+      const suffixe = classeExport ? classeExport.nom.replace(/[^A-Za-z0-9]+/g, "-") : "toutes-classes";
+      await downloadAuthFile(elevesApi.exportExcelPath(classeExport?.id), `eleves_${suffixe}.xlsx`, { open: false });
+    } catch (err) {
+      notify(extractErrorMessage(err), "error");
+    } finally {
+      setExportEnCours(false);
+    }
+  };
 
   const openCreate = () => {
     setEditingEleve(null);
@@ -127,7 +172,7 @@ export default function ElevesPage() {
     setForm({
       ...EMPTY_FORM,
       annee_scolaire: anneeCourante?.id || "",
-      classe: selectedClasseFilter || "",
+      classe: classeExport ? String(classeExport.id) : "",
     });
     setPhotoFile(null);
     setPhotoPreview(null);
@@ -236,6 +281,14 @@ export default function ElevesPage() {
         subtitle="Gestion des inscriptions, profils scolaires et impression des cartes d'identité scolaire."
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            <button onClick={exporterExcel} disabled={exportEnCours} className="btn-secondary"
+              title={classeExport ? `Liste des élèves de ${classeExport.nom}` : "Toutes les classes, un onglet par classe"}>
+              {exportEnCours ? <Loader2 size={16} className="animate-spin" /> : <FileSpreadsheet size={16} />}
+              {classeExport ? `Excel : ${classeExport.nom}` : "Excel (toutes les classes)"}
+            </button>
+            <button onClick={() => setArchivesOuvertes(true)} className="btn-secondary" title="Archives ZIP des données élèves">
+              <Archive size={16} /> Archives
+            </button>
             <button
               onClick={() => navigate("/cartes-scolaires")}
               className="btn-secondary"
@@ -253,8 +306,8 @@ export default function ElevesPage() {
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={saisie}
+            onChange={(e) => setSaisie(e.target.value)}
             placeholder="Rechercher par nom, prénom ou matricule..."
             className="input w-72"
           />
@@ -262,10 +315,11 @@ export default function ElevesPage() {
             <Filter size={14} className="text-slate-400" />
             <select
               value={selectedClasseFilter}
-              onChange={(e) => setSelectedClasseFilter(e.target.value)}
+              onChange={(e) => { setSelectedClasseFilter(e.target.value); setPage(1); }}
               className="bg-transparent font-medium text-slate-700 outline-none"
             >
               <option value="">Toutes les classes</option>
+              <option value="aucune">Sans classe</option>
               {classes.map((c) => (
                 <option key={c.id} value={c.id}>{c.nom}</option>
               ))}
@@ -274,7 +328,9 @@ export default function ElevesPage() {
         </div>
 
         <div className="text-xs text-slate-500">
-          <strong>{elevesList.length}</strong> élève(s) affiché(s)
+          <strong className="tabular-nums text-slate-700">{elevesList.length}</strong> affiché(s) sur{" "}
+          <strong className="tabular-nums text-slate-700">{totalEleves}</strong> élève(s)
+          {classeExport ? ` en ${classeExport.nom}` : selectedClasseFilter === "aucune" ? " sans classe" : ""}
         </div>
       </div>
 
@@ -383,6 +439,20 @@ export default function ElevesPage() {
           },
         ]}
       />
+
+      <div className="mt-4">
+        <Pagination
+          page={page}
+          taille={taillePage}
+          total={totalEleves}
+          onPage={setPage}
+          onTaille={changerTaillePage}
+          libelle="élève(s)"
+          chargement={loading}
+        />
+      </div>
+
+      <ArchivesElevesModal open={archivesOuvertes} onClose={() => setArchivesOuvertes(false)} />
 
       {/* --- MODAL AFFECTATION À UNE CLASSE --- */}
       <Modal

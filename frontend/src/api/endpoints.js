@@ -41,6 +41,12 @@ export const journalActiviteApi = resource("/journal-activite");
 export const elevesApi = {
   ...resource("/eleves"),
   historique: (id) => api.get(`/eleves/${id}/historique/`).then((r) => r.data),
+  exportExcelPath: (classe) => `/eleves/export_excel/${classe ? `?classe=${classe}` : ""}`,
+};
+export const archivesElevesApi = {
+  list: (params) => api.get("/archives-eleves/", { params }).then((r) => r.data),
+  creer: () => api.post("/archives-eleves/creer/").then((r) => r.data),
+  telechargerPath: (id) => `/archives-eleves/${id}/telecharger/`,
 };
 export const inscriptionsApi = resource("/inscriptions");
 export const absencesApi = resource("/absences");

@@ -224,6 +224,9 @@ if not DEBUG:
 # Préfixe utilisé pour la génération automatique des matricules élèves
 MATRICULE_PREFIX = config("MATRICULE_PREFIX", default="GS")
 
+# Archives ZIP des données élèves : nombre d'archives conservées par établissement (apps/students/archives.py)
+ARCHIVES_ELEVES_MAX = config("ARCHIVES_ELEVES_MAX", default=50, cast=int)
+
 # Fournisseur SMS (à brancher : Orange, Twilio, etc.)
 SMS_BACKEND = config("SMS_BACKEND", default="console")
 

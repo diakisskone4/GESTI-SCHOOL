@@ -1,22 +1,50 @@
 from django.core.files.base import ContentFile
-from django.http import FileResponse
-from rest_framework import viewsets
+from django.db.models import Prefetch
+from django.http import FileResponse, HttpResponse
+from django.shortcuts import get_object_or_404
+from rest_framework import mixins, viewsets
 from rest_framework.decorators import action
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.core.pdf_utils import generer_carte_scolaire_pdf
 from apps.core.permissions import IsAdmin, IsAdminOrReadOnly, IsAdminOuSurveillant
-from apps.students.models import Absence, CarteScolaire, Eleve, Inscription, SanctionRecompense
+from apps.students.archives import archiver_apres_operation, creer_archive, donnees_eleve
+from apps.students.exports import classeur_eleves, nom_fichier_excel
+from apps.students.models import Absence, ArchiveEleves, CarteScolaire, Eleve, Inscription, SanctionRecompense
 from apps.students.serializers import (
     AbsenceSerializer,
+    ArchiveElevesSerializer,
     CarteScolaireSerializer,
     EleveSerializer,
     InscriptionSerializer,
     SanctionRecompenseSerializer,
 )
-from apps.core.tenancy import EtablissementScopedMixin, etablissement_actif_id
+from apps.core.tenancy import (
+    EtablissementScopedMixin, classe_du_perimetre, etablissement_actif_id, verifier_etablissement,
+)
+
+XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+class PaginationAjustable(PageNumberPagination):
+    """25 lignes par défaut ; ?page_size= permet d'en afficher davantage (500 au maximum)."""
+    page_size = 25
+    page_size_query_param = "page_size"
+    max_page_size = 500
+
+
+def _etablissement_cible(request):
+    """Établissement concerné par un export ou une archive : l'établissement actif de l'utilisateur."""
+    from apps.core.models import Etablissement
+
+    demande = request.query_params.get("etablissement") or request.data.get("etablissement")
+    etablissement_id = verifier_etablissement(request.user, demande)
+    if not etablissement_id:
+        raise ValidationError({"etablissement": "Choisissez d'abord un établissement."})
+    return get_object_or_404(Etablissement, pk=etablissement_id)
 
 
 class EleveViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
@@ -24,8 +52,50 @@ class EleveViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
     queryset = Eleve.objects.select_related("etablissement", "user")
     serializer_class = EleveSerializer
     permission_classes = [IsAdminOrReadOnly]
+    pagination_class = PaginationAjustable
     filterset_fields = ["etablissement", "sexe", "actif", "user"]
     search_fields = ["nom", "prenom", "matricule"]
+
+    def get_queryset(self):
+        """?classe=<id> : élèves inscrits (inscription active) dans la classe ; ?classe=aucune : sans classe."""
+        actives = Inscription.objects.filter(statut="active").select_related("classe").order_by("-date_inscription")
+        qs = Eleve.objects.select_related("etablissement", "user").prefetch_related(
+            Prefetch("inscriptions", queryset=actives, to_attr="inscriptions_actives"),
+        )
+        classe = self.request.query_params.get("classe")
+        if classe == "aucune":
+            qs = qs.exclude(inscriptions__statut="active")
+        elif classe:
+            if not str(classe).isdigit():
+                raise ValidationError({"classe": "Classe invalide."})
+            qs = qs.filter(inscriptions__classe_id=classe, inscriptions__statut="active").distinct()
+        return qs
+
+    def perform_create(self, serializer):
+        eleve = serializer.save()
+        archiver_apres_operation(eleve.etablissement_id, self.request.user, "creation", f"Inscription de l'élève {eleve}")
+
+    def perform_update(self, serializer):
+        eleve = serializer.save()
+        archiver_apres_operation(eleve.etablissement_id, self.request.user, "modification", f"Modification du profil de {eleve}")
+
+    def perform_destroy(self, instance):
+        avant = donnees_eleve(instance)
+        etablissement_id, libelle = instance.etablissement_id, str(instance)
+        instance.delete()
+        archiver_apres_operation(etablissement_id, self.request.user, "suppression", f"Suppression de l'élève {libelle}", avant=avant)
+
+    @action(detail=False, methods=["get"], permission_classes=[IsAdmin])
+    def export_excel(self, request):
+        """Liste des élèves en Excel : ?classe=<id> pour une classe, sinon toutes les classes (un onglet par classe)."""
+        etablissement = _etablissement_cible(request)
+        classe_id = request.query_params.get("classe")
+        classe = classe_du_perimetre(request.user, classe_id) if classe_id else None
+        if classe is not None and classe.etablissement_id != etablissement.pk:
+            raise PermissionDenied("Cette classe appartient à un autre établissement.")
+        reponse = HttpResponse(classeur_eleves(etablissement, classe), content_type=XLSX)
+        reponse["Content-Disposition"] = f'attachment; filename="{nom_fichier_excel(etablissement, classe)}"'
+        return reponse
 
     @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated])
     def historique(self, request, pk=None):
@@ -79,6 +149,46 @@ class InscriptionViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
         if self.action in ("create", "update", "partial_update", "destroy"):
             return [IsAdmin()]
         return [IsAuthenticated()]
+
+    def perform_create(self, serializer):
+        insc = serializer.save()
+        archiver_apres_operation(insc.eleve.etablissement_id, self.request.user, "inscription",
+                                 f"{insc.eleve} inscrit(e) en {insc.classe.nom} ({insc.annee_scolaire.libelle})")
+
+    def perform_update(self, serializer):
+        insc = serializer.save()
+        archiver_apres_operation(insc.eleve.etablissement_id, self.request.user, "changement_classe",
+                                 f"{insc.eleve} : {insc.classe.nom} ({insc.annee_scolaire.libelle}), statut {insc.get_statut_display()}")
+
+    def perform_destroy(self, instance):
+        etablissement_id = instance.eleve.etablissement_id
+        libelle = f"Inscription de {instance.eleve} en {instance.classe.nom} ({instance.annee_scolaire.libelle}) supprimée"
+        avant = donnees_eleve(instance.eleve)
+        instance.delete()
+        archiver_apres_operation(etablissement_id, self.request.user, "suppression", libelle, avant=avant)
+
+
+class ArchiveElevesViewSet(EtablissementScopedMixin, mixins.ListModelMixin, viewsets.GenericViewSet):
+    """Archives ZIP des données élèves de l'établissement actif (administrateurs)."""
+    etablissement_field = "etablissement"
+    queryset = ArchiveEleves.objects.select_related("auteur").defer("contenu")
+    serializer_class = ArchiveElevesSerializer
+    permission_classes = [IsAdmin]
+    pagination_class = PaginationAjustable
+
+    @action(detail=True, methods=["get"])
+    def telecharger(self, request, pk=None):
+        archive = get_object_or_404(self.get_queryset().defer(None), pk=pk)
+        reponse = HttpResponse(bytes(archive.contenu), content_type="application/zip")
+        reponse["Content-Disposition"] = f'attachment; filename="{archive.nom_fichier}"'
+        return reponse
+
+    @action(detail=False, methods=["post"])
+    def creer(self, request):
+        """« Archiver maintenant » : archive complète immédiate, indépendante des opérations."""
+        etablissement = _etablissement_cible(request)
+        archive = creer_archive(etablissement, request.user, "manuelle", "Archive créée à la demande", regrouper=False)
+        return Response(self.get_serializer(archive).data, status=201)
 
 
 def _scoper_par_eleve_ou_parent(qs, user, chemin="inscription__eleve"):
