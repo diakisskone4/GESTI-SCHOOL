@@ -28,7 +28,7 @@ export default function ClassesPage() {
   const { data: niveaux } = useFetch(() => niveauxApi.list({ etablissement: etablissementId }), [etablissementId, refreshKey]);
   const { data: annees } = useFetch(() => anneesScolairesApi.list({ etablissement: etablissementId }), [etablissementId, refreshKey]);
   const { data: series } = useFetch(() => seriesApi.list(), [etablissementId, refreshKey]);
-  const { data: enseignants } = useFetch(() => enseignantsApi.list({ etablissement: etablissementId }), [etablissementId, refreshKey]);
+  const { data: enseignants } = useFetch(() => enseignantsApi.list({ etablissement: etablissementId, ordering: "nom" }), [etablissementId, refreshKey]);
 
   const niveauOptions = (niveaux?.results || []).map((n) => ({ value: n.id, label: n.nom }));
   const anneeOptions = (annees?.results || []).map((a) => ({

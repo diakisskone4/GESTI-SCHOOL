@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Pencil, Trash2, CalendarClock, GraduationCap, Loader2, BookOpen } from "lucide-react";
+import { Plus, Pencil, Trash2, CalendarClock, GraduationCap, Loader2, BookOpen, FileSpreadsheet, Users } from "lucide-react";
 import PageHeader from "../../components/ui/PageHeader";
 import DataTable from "../../components/ui/DataTable";
 import Modal from "../../components/ui/Modal";
+import Pagination, { TAILLES_PAGE } from "../../components/ui/Pagination";
+import { downloadAuthFile } from "../../utils/download";
 import { useFetch } from "../../hooks/useFetch";
 import { useAuth } from "../../context/AuthContext";
 import { useToast, extractErrorMessage } from "../../context/ToastContext";
@@ -29,7 +31,60 @@ export default function EnseignantsPage() {
   const navigate = useNavigate();
   const etablissementId = user?.etablissement_courant;
 
-  const { data, loading, reload } = useFetch(() => enseignantsApi.list({ etablissement: etablissementId }), [etablissementId]);
+  const [saisie, setSaisie] = useState("");
+  const [recherche, setRecherche] = useState("");
+  const [page, setPage] = useState(1);
+  const [taillePage, setTaillePage] = useState(() => {
+    try {
+      const memorisee = Number(localStorage.getItem("gs_enseignants_par_page"));
+      return TAILLES_PAGE.includes(memorisee) ? memorisee : 200;
+    } catch {
+      return 200;
+    }
+  });
+  const [exportEnCours, setExportEnCours] = useState(false);
+
+  // Recherche lancée 300 ms après la dernière frappe, en revenant à la première page
+  useEffect(() => {
+    const t = setTimeout(() => { setRecherche(saisie.trim()); setPage(1); }, 300);
+    return () => clearTimeout(t);
+  }, [saisie]);
+
+  const changerTaillePage = (taille) => {
+    setTaillePage(taille);
+    setPage(1);
+    try { localStorage.setItem("gs_enseignants_par_page", String(taille)); } catch { /* préférence non mémorisée */ }
+  };
+
+  // Les derniers enseignants ajoutés d'abord (tri du serveur) ; recherche et pagination faites par le serveur
+  const { data, loading, reload } = useFetch(
+    () => enseignantsApi.list({ etablissement: etablissementId, search: recherche || undefined, page, page_size: taillePage }),
+    [etablissementId, recherche, page, taillePage]
+  );
+  const enseignants = data?.results || [];
+  const totalAffichable = data?.count ?? 0;
+
+  // Total de l'établissement, indépendant de la recherche et de la page (recalculé après chaque opération)
+  const { data: effectif } = useFetch(
+    () => enseignantsApi.list({ etablissement: etablissementId, page_size: 1 }).then((r) => r.count),
+    [etablissementId, data]
+  );
+
+  // Après une suppression, la dernière page peut devenir vide : on revient à la précédente
+  useEffect(() => {
+    if (data && data.results?.length === 0 && page > 1) setPage(page - 1);
+  }, [data, page]);
+
+  const exporterExcel = async () => {
+    setExportEnCours(true);
+    try {
+      await downloadAuthFile(enseignantsApi.exportExcelPath(), "enseignants.xlsx", { open: false });
+    } catch (err) {
+      notify(extractErrorMessage(err), "error");
+    } finally {
+      setExportEnCours(false);
+    }
+  };
   const { data: matieresData } = useFetch(() => matieresApi.list({ etablissement: etablissementId }), [etablissementId]);
   const matieres = matieresData?.results || [];
 
@@ -137,7 +192,18 @@ export default function EnseignantsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Enseignants"
+        title={
+          <span className="flex flex-wrap items-center gap-3">
+            Enseignants
+            {typeof effectif === "number" && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1 text-sm font-semibold text-brand-700">
+                <Users size={15} />
+                <span className="tabular-nums">{effectif.toLocaleString("fr-FR")}</span>
+                enseignant{effectif > 1 ? "s" : ""}
+              </span>
+            )}
+          </span>
+        }
         subtitle="Gestion du corps enseignant, matières dispensées, plannings et contrats."
         actions={
           <button onClick={openCreate} className="btn-primary">
@@ -146,9 +212,34 @@ export default function EnseignantsPage() {
         }
       />
 
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <input
+          value={saisie}
+          onChange={(e) => setSaisie(e.target.value)}
+          placeholder="Rechercher par nom, prénom, matricule, téléphone..."
+          className="input w-80 max-w-full"
+        />
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-xs text-slate-500">
+            <strong className="tabular-nums text-slate-700">{enseignants.length}</strong> affiché(s) sur{" "}
+            <strong className="tabular-nums text-slate-700">{totalAffichable}</strong> enseignant(s)
+            {!recherche && totalAffichable > 0 && " · les derniers ajoutés en premier"}
+          </span>
+          <button
+            onClick={exporterExcel}
+            disabled={exportEnCours}
+            className="flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+            title="Télécharger la liste de tous les enseignants"
+          >
+            {exportEnCours ? <Loader2 size={14} className="animate-spin" /> : <FileSpreadsheet size={14} />}
+            Télécharger en Excel
+          </button>
+        </div>
+      </div>
+
       <DataTable
-        loading={loading}
-        rows={data?.results || []}
+        loading={loading && !data}
+        rows={enseignants}
         columns={[
           {
             key: "matricule",
@@ -228,6 +319,16 @@ export default function EnseignantsPage() {
             ),
           },
         ]}
+      />
+
+      <Pagination
+        page={page}
+        taille={taillePage}
+        total={totalAffichable}
+        onPage={setPage}
+        onTaille={changerTaillePage}
+        libelle="enseignant(s)"
+        chargement={loading}
       />
 
       {/* MODAL AJOUT / MODIFICATION ENSEIGNANT */}

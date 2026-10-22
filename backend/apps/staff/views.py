@@ -4,6 +4,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.core.pagination import PaginationListeDeReference
 from apps.core.permissions import IsAdmin, IsAdminOrReadOnly, IsAdminOuComptable, IsEnseignant
 from apps.staff.models import Affectation, DocumentPedagogique, Employe, Enseignant, PresenceEmploye
 from apps.staff.serializers import (
@@ -30,8 +31,33 @@ class EnseignantViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
     queryset = Enseignant.objects.select_related("user", "etablissement").prefetch_related("matieres_enseignees")
     serializer_class = EnseignantSerializer
     permission_classes = [IsAdminOrReadOnly]
+    # Les 200 derniers enseignants ajoutés par défaut (?page_size= jusqu'à 500, ?ordering=nom pour l'ordre alphabétique)
+    pagination_class = PaginationListeDeReference
+    ordering_fields = ["created_at", "nom", "prenom", "matricule"]
+    ordering = ["-created_at", "nom"]
     filterset_fields = ["etablissement", "actif"]
-    search_fields = ["nom", "prenom", "matricule"]
+    search_fields = ["nom", "prenom", "matricule", "telephone", "specialite"]
+
+    @action(detail=False, methods=["get"], permission_classes=[IsAdmin])
+    def export_excel(self, request):
+        """Liste de tous les enseignants de l'établissement actif, en Excel."""
+        from django.http import HttpResponse
+        from django.shortcuts import get_object_or_404
+
+        from apps.core.models import Etablissement
+        from apps.core.tenancy import verifier_etablissement
+        from apps.staff.exports import classeur_enseignants, nom_fichier_enseignants
+
+        etablissement_id = verifier_etablissement(request.user, request.query_params.get("etablissement"))
+        if not etablissement_id:
+            return Response({"etablissement": "Choisissez d'abord un établissement."}, status=400)
+        etablissement = get_object_or_404(Etablissement, pk=etablissement_id)
+        reponse = HttpResponse(
+            classeur_enseignants(etablissement),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+        reponse["Content-Disposition"] = f'attachment; filename="{nom_fichier_enseignants(etablissement)}"'
+        return reponse
 
     @action(detail=False, methods=["get"], permission_classes=[IsEnseignant])
     def moi(self, request):

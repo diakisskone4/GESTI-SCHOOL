@@ -159,7 +159,7 @@ export default function EmploiDuTempsPage() {
   const { data: matieresData } = useFetch(() => matieresApi.list({ etablissement: etablissementId }), [etablissementId]);
   const matieres = matieresData?.results || [];
 
-  const { data: enseignantsData } = useFetch(() => enseignantsApi.list({ etablissement: etablissementId }), [etablissementId]);
+  const { data: enseignantsData } = useFetch(() => enseignantsApi.list({ etablissement: etablissementId, ordering: "nom" }), [etablissementId]);
   const enseignants = enseignantsData?.results || [];
 
   const { data: etablissement } = useFetch(

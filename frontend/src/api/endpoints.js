@@ -73,6 +73,7 @@ export const employesApi = resource("/employes");
 export const enseignantsApi = {
   ...resource("/enseignants"),
   moi: () => api.get("/enseignants/moi/").then((r) => r.data),
+  exportExcelPath: () => "/enseignants/export_excel/",
   tableauDeBord: (id) => api.get(`/enseignants/${id}/tableau_de_bord/`).then((r) => r.data),
 };
 export const affectationsApi = resource("/affectations");
