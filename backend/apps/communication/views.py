@@ -1,12 +1,17 @@
-from django.db.models import Q
+from django.db import transaction
+from django.db.models import Prefetch, Q
+from django.http import Http404, HttpResponse
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework import viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.views import APIView
 from rest_framework.response import Response
 
-from apps.communication.models import Annonce, Message, Notification
+from apps.communication.images import max_images, preparer_image
+from apps.communication.models import Annonce, ImageAnnonce, Message, Notification
 from apps.communication.serializers import AnnonceSerializer, MessageSerializer, NotificationSerializer
 from apps.core.permissions import IsAdminOrReadOnly
 from apps.core.tenancy import EtablissementScopedMixin, etablissement_actif_id, etablissements_famille_ids
@@ -71,7 +76,9 @@ class MessageViewSet(viewsets.ModelViewSet):
 class AnnonceViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
     """Annonces : les enseignants publient pour leurs classes, l'admin pour tout l'établissement."""
     etablissement_field = "etablissement"
-    queryset = Annonce.objects.select_related("auteur", "classe", "etablissement")
+    queryset = Annonce.objects.select_related("auteur", "classe", "etablissement").prefetch_related(
+        Prefetch("images", queryset=ImageAnnonce.objects.defer("contenu")),
+    )
     serializer_class = AnnonceSerializer
     permission_classes = [IsAdminOrReadOnly]
     filterset_fields = ["etablissement", "public_cible", "classe", "epinglee"]
@@ -87,7 +94,25 @@ class AnnonceViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
         if not (user.est_admin or user.est_enseignant):
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("Seuls les enseignants et administrateurs peuvent publier des annonces.")
-        serializer.save(auteur=user)
+        images = self._images_envoyees(deja=0)
+        annonce = serializer.save(auteur=user)
+        self._enregistrer_images(annonce, images)
+
+    def _images_envoyees(self, deja):
+        """Images jointes à la requête (champ « images », plusieurs fichiers), vérifiées et redimensionnées
+        AVANT tout enregistrement : une image refusée annule toute l'opération."""
+        fichiers = self.request.FILES.getlist("images")
+        if deja + len(fichiers) > max_images():
+            raise ValidationError({"images": f"{max_images()} images au maximum par annonce."})
+        return [(f.name, *preparer_image(f)) for f in fichiers]
+
+    def _enregistrer_images(self, annonce, images):
+        depart = annonce.images.count()
+        ImageAnnonce.objects.bulk_create([
+            ImageAnnonce(annonce=annonce, contenu=contenu, type_mime=mime, nom_fichier=nom[:255],
+                         largeur=largeur, hauteur=hauteur, taille=len(contenu), ordre=depart + i)
+            for i, (nom, contenu, mime, largeur, hauteur) in enumerate(images)
+        ])
 
     def _verifier_auteur_ou_admin(self, instance):
         user = self.request.user
@@ -96,8 +121,17 @@ class AnnonceViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
             raise PermissionDenied("Vous ne pouvez modifier ou supprimer que vos propres annonces.")
 
     def perform_update(self, serializer):
-        self._verifier_auteur_ou_admin(serializer.instance)
-        serializer.save()
+        """Modification : « images » ajoute des images, « images_a_retirer » (identifiants) en retire."""
+        annonce = serializer.instance
+        self._verifier_auteur_ou_admin(annonce)
+        a_retirer = self.request.data.getlist("images_a_retirer") if hasattr(self.request.data, "getlist") \
+            else self.request.data.get("images_a_retirer", [])
+        restantes = annonce.images.exclude(pk__in=a_retirer).count()
+        images = self._images_envoyees(deja=restantes)
+        with transaction.atomic():
+            serializer.save()
+            annonce.images.filter(pk__in=a_retirer).delete()
+            self._enregistrer_images(annonce, images)
 
     def perform_destroy(self, instance):
         self._verifier_auteur_ou_admin(instance)
@@ -127,3 +161,20 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=["get"])
     def non_lues(self, request):
         return Response({"non_lues": self.get_queryset().filter(lu=False).count()})
+
+
+class ImageAnnonceView(APIView):
+    """Image d'une annonce, servie depuis la base de données. Publique comme le logo de l'établissement
+    (une balise <img> n'envoie pas le jeton de connexion) : l'adresse contient un identifiant aléatoire
+    impossible à deviner, connu seulement de ceux qui voient l'annonce."""
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    swagger_schema = None
+
+    def get(self, request, pk):
+        image = ImageAnnonce.objects.filter(pk=pk).only("contenu", "type_mime").first()
+        if image is None:
+            raise Http404("Image introuvable.")
+        reponse = HttpResponse(bytes(image.contenu), content_type=image.type_mime)
+        reponse["Cache-Control"] = "public, max-age=604800, immutable"  # le contenu d'une image ne change jamais
+        return reponse

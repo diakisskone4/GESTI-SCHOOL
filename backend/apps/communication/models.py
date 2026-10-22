@@ -79,3 +79,30 @@ class Notification(TimeStampedModel):
 
     def __str__(self):
         return f"{self.get_canal_display()} -> {self.destinataire} : {self.titre or self.contenu[:30]}"
+
+
+class ImageAnnonce(models.Model):
+    """Image illustrant une annonce, visible par tous ceux qui voient l'annonce.
+
+    Stockée en base de données (redimensionnée, voir apps/communication/images.py) : sur les hébergements sans
+    disque persistant (Render gratuit), les fichiers envoyés disparaîtraient à chaque redéploiement.
+    L'identifiant est un UUID impossible à deviner : l'image peut ainsi être affichée dans une balise <img>.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    annonce = models.ForeignKey(Annonce, on_delete=models.CASCADE, related_name="images")
+    contenu = models.BinaryField()
+    type_mime = models.CharField(max_length=50, default="image/jpeg")
+    nom_fichier = models.CharField(max_length=255, blank=True)
+    largeur = models.PositiveIntegerField(default=0)
+    hauteur = models.PositiveIntegerField(default=0)
+    taille = models.PositiveIntegerField(default=0)
+    ordre = models.PositiveSmallIntegerField(default=0)
+    cree_le = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["ordre", "cree_le"]
+        verbose_name = "Image d'annonce"
+        verbose_name_plural = "Images d'annonces"
+
+    def __str__(self):
+        return f"{self.annonce} — {self.nom_fichier or self.pk}"

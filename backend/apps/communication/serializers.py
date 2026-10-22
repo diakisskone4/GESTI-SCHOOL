@@ -37,6 +37,19 @@ class MessageSerializer(serializers.ModelSerializer):
 
 class AnnonceSerializer(serializers.ModelSerializer):
     auteur_nom = serializers.CharField(source="auteur.get_full_name", read_only=True)
+    images = serializers.SerializerMethodField()
+
+    def get_images(self, obj):
+        """Images de l'annonce : adresse publique (non devinable) utilisable directement dans <img>."""
+        request = self.context.get("request")
+        resultat = []
+        for image in obj.images.all():
+            url = f"/api/v1/annonces/images/{image.pk}/"
+            resultat.append({
+                "id": str(image.pk), "url": request.build_absolute_uri(url) if request else url,
+                "largeur": image.largeur, "hauteur": image.hauteur, "nom_fichier": image.nom_fichier,
+            })
+        return resultat
 
     class Meta:
         model = Annonce
