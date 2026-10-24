@@ -5,7 +5,7 @@ from rest_framework import serializers
 from apps.accounts.doublons import verifier_email_utilisateur, verifier_telephone_utilisateur
 from apps.accounts.models import User
 from apps.core.models import Etablissement
-from apps.plateforme.models import DUREES_MOIS, Abonnement, JournalConsole, ajouter_mois
+from apps.plateforme.models import DUREES_MOIS, Abonnement, DemandeDemo, JournalConsole, ajouter_mois
 
 
 class AbonnementSerializer(serializers.ModelSerializer):
@@ -168,3 +168,29 @@ class JournalConsoleSerializer(serializers.ModelSerializer):
 
     def get_auteur_nom(self, obj):
         return obj.auteur.get_full_name() if obj.auteur else "Compte supprimé"
+
+
+class DemandeDemoPubliqueSerializer(serializers.ModelSerializer):
+    """Formulaire du site vitrine. `site_web` est un piège à robots : invisible pour les visiteurs, il doit rester vide."""
+    site_web = serializers.CharField(required=False, allow_blank=True, write_only=True)
+
+    class Meta:
+        model = DemandeDemo
+        fields = ["nom", "etablissement", "fonction", "telephone", "email", "ville", "nb_eleves", "message", "site_web"]
+
+    def validate_telephone(self, value):
+        chiffres = "".join(c for c in value if c.isdigit())
+        if len(chiffres) < 8:
+            raise serializers.ValidationError("Numéro de téléphone incomplet.")
+        return value.strip()
+
+
+class DemandeDemoSerializer(serializers.ModelSerializer):
+    statut_label = serializers.CharField(source="get_statut_display", read_only=True)
+
+    class Meta:
+        model = DemandeDemo
+        fields = ["id", "nom", "etablissement", "fonction", "telephone", "email", "ville", "nb_eleves", "message",
+                  "statut", "statut_label", "notes", "cree_le", "modifie_le"]
+        read_only_fields = ["nom", "etablissement", "fonction", "telephone", "email", "ville", "nb_eleves", "message",
+                            "cree_le", "modifie_le"]

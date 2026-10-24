@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from apps.plateforme.models import Abonnement, JournalConsole
+from apps.plateforme.models import Abonnement, DemandeDemo, JournalConsole
 
 
 @admin.register(Abonnement)
@@ -15,3 +15,10 @@ class JournalConsoleAdmin(admin.ModelAdmin):
     list_display = ["horodatage", "auteur", "action", "etablissement_nom", "details"]
     list_filter = ["action"]
     search_fields = ["etablissement_nom", "details"]
+
+
+@admin.register(DemandeDemo)
+class DemandeDemoAdmin(admin.ModelAdmin):
+    list_display = ["cree_le", "etablissement", "nom", "telephone", "ville", "statut"]
+    list_filter = ["statut"]
+    search_fields = ["etablissement", "nom", "telephone", "email"]

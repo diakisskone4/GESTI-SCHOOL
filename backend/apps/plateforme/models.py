@@ -95,3 +95,30 @@ class JournalConsole(models.Model):
 
     def __str__(self):
         return f"[{self.horodatage:%d/%m/%Y %H:%M}] {self.get_action_display()} — {self.etablissement_nom}"
+
+
+class DemandeDemo(models.Model):
+    """Demande de démonstration ou de contact envoyée depuis le site vitrine (dossier site/)."""
+    STATUT_CHOICES = [("nouvelle", "Nouvelle"), ("en_cours", "En cours"), ("convertie", "Client"), ("abandonnee", "Sans suite")]
+
+    nom = models.CharField(max_length=150)
+    etablissement = models.CharField(max_length=200)
+    fonction = models.CharField(max_length=100, blank=True)
+    telephone = models.CharField(max_length=30)
+    email = models.EmailField(blank=True)
+    ville = models.CharField(max_length=100, blank=True)
+    nb_eleves = models.CharField(max_length=30, blank=True)
+    message = models.TextField(blank=True)
+    statut = models.CharField(max_length=12, choices=STATUT_CHOICES, default="nouvelle", db_index=True)
+    notes = models.TextField(blank=True, help_text="Notes internes de l'équipe")
+    adresse_ip = models.GenericIPAddressField(null=True, blank=True)
+    cree_le = models.DateTimeField(auto_now_add=True, db_index=True)
+    modifie_le = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-cree_le"]
+        verbose_name = "Demande de démonstration"
+        verbose_name_plural = "Demandes de démonstration"
+
+    def __str__(self):
+        return f"{self.etablissement} — {self.nom} ({self.cree_le:%d/%m/%Y})"

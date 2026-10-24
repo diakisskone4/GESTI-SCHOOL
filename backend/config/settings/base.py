@@ -180,6 +180,8 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_THROTTLE_RATES": {
         "auth": "20/min",
+        # Formulaire de contact du site vitrine (par adresse IP)
+        "contact": "10/hour",
     },
     "EXCEPTION_HANDLER": "apps.core.exceptions.exception_handler",
 }

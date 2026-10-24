@@ -1,10 +1,11 @@
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { LayoutDashboard, LogOut, School, ShieldCheck, Users } from "lucide-react";
+import { Inbox, LayoutDashboard, LogOut, School, ShieldCheck, Users } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 
 const ONGLETS = [
   { label: "Tableau de bord", to: "/console", icon: LayoutDashboard, end: true },
   { label: "Établissements", to: "/console/etablissements", icon: School },
+  { label: "Demandes", to: "/console/demandes", icon: Inbox },
   { label: "Équipe", to: "/console/equipe", icon: Users },
 ];
 

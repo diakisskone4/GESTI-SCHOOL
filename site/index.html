@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gesti-Scolaire — Logiciel de gestion scolaire pour écoles, collèges et lycées</title>
+  <meta name="description" content="Gesti-Scolaire gère toute votre école en ligne : inscriptions, notes et bulletins, tableau d'honneur, cartes scolaires, absences, frais scolaires et reçus en FCFA, paie, annonces aux parents. Démonstration gratuite.">
+  <meta name="theme-color" content="#5f34dd">
+  <link rel="icon" href="images/favicon.svg" type="image/svg+xml">
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Gesti-Scolaire — Toute votre école dans une seule application">
+  <meta property="og:description" content="Élèves, notes, bulletins, tableau d'honneur, frais scolaires, paie et communication avec les parents. Démonstration gratuite.">
+  <meta property="og:image" content="images/partage.jpg">
+  <meta property="og:locale" content="fr_FR">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <script src="js/config.js"></script>
+  <script src="js/main.js" defer></script>
+</head>
+<body>
+  <a class="aller-au-contenu" href="#contenu">Aller au contenu</a>
+
+  <!-- ===================== En-tête ===================== -->
+  <header class="entete" id="entete">
+    <div class="conteneur entete__barre">
+      <a href="#" class="logo" aria-label="Gesti-Scolaire, accueil">
+        <span class="logo__icone" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10 12 5 2 10l10 5 10-5Z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+        </span>
+        Gesti-Scolaire
+      </a>
+      <nav class="menu" id="menu" aria-label="Navigation principale">
+        <a href="#fonctionnalites">Fonctionnalités</a>
+        <a href="#profils">Pour qui ?</a>
+        <a href="#securite">Sécurité</a>
+        <a href="#tarifs">Tarifs</a>
+        <a href="#faq">Questions</a>
+        <a href="#" class="menu__connexion" data-lien-app>Se connecter</a>
+        <a href="#contact" class="bouton bouton--principal">Demander une démo</a>
+      </nav>
+      <button class="burger" id="burger" aria-label="Ouvrir le menu" aria-expanded="false" aria-controls="menu">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <main id="contenu">
+    <!-- ===================== Accroche ===================== -->
+    <section class="accroche">
+      <div class="conteneur accroche__grille">
+        <div class="accroche__texte">
+          <p class="etiquette">Logiciel de gestion scolaire en ligne</p>
+          <h1>Toute votre école dans <span class="surligne">une seule application</span></h1>
+          <p class="accroche__intro">
+            Inscriptions, notes et bulletins, tableau d'honneur, cartes scolaires, frais scolaires et paie :
+            Gesti-Scolaire simplifie le travail de la direction, des enseignants et du comptable,
+            et garde les parents informés.
+          </p>
+          <div class="accroche__actions">
+            <a href="#contact" class="bouton bouton--principal bouton--grand">Demander une démonstration gratuite</a>
+            <a href="#fonctionnalites" class="bouton bouton--secondaire bouton--grand">Découvrir</a>
+          </div>
+          <ul class="accroche__atouts">
+            <li>Aucune installation : fonctionne sur ordinateur et téléphone</li>
+            <li>Bulletins, reçus et documents prêts à imprimer</li>
+            <li>Montants en FCFA, adapté aux écoles du Mali</li>
+          </ul>
+        </div>
+        <figure class="accroche__visuel">
+          <div class="ecran">
+            <img src="images/app-eleves.webp" width="1600" height="1000" alt="Liste des élèves dans Gesti-Scolaire : matricules, classes, cartes scolaires et export Excel" fetchpriority="high">
+          </div>
+          <div class="telephone">
+            <img src="images/app-mobile.webp" width="600" height="1298" alt="Tableau d'honneur publié dans les annonces, vu sur téléphone par un élève" loading="lazy">
+          </div>
+        </figure>
+      </div>
+    </section>
+
+    <!-- ===================== Bande de chiffres ===================== -->
+    <section class="bande" aria-label="En bref">
+      <div class="conteneur bande__grille">
+        <div><strong>15+</strong><span>modules intégrés</span></div>
+        <div><strong>6</strong><span>profils d'utilisateurs</span></div>
+        <div><strong>PDF</strong><span>bulletins, reçus, cartes</span></div>
+        <div><strong>24 h/24</strong><span>accessible partout</span></div>
+      </div>
+    </section>
+
+    <!-- ===================== Fonctionnalités ===================== -->
+    <section class="section" id="fonctionnalites">
+      <div class="conteneur">
+        <header class="section__titre">
+          <p class="etiquette">Fonctionnalités</p>
+          <h2>Tout ce dont votre établissement a besoin</h2>
+          <p>Un seul outil, du premier jour de la rentrée jusqu'au dernier bulletin de l'année.</p>
+        </header>
+        <div class="cartes">
+          <article class="carte">
+            <span class="carte__icone" aria-hidden="true">👩🏾‍🎓</span>
+            <h3>Élèves et inscriptions</h3>
+            <p>Dossiers complets, matricules automatiques, affectation aux classes, recherche instantanée et liste Excel par classe.</p>
+          </article>
+          <article class="carte">
+            <span class="carte__icone" aria-hidden="true">📝</span>
+            <h3>Notes et bulletins</h3>
+            <p>Carnet de notes par évaluation, moyennes pondérées par coefficient, rangs, mentions et bulletins PDF A4 ou A5.</p>
+          </article>
+          <article class="carte">
+            <span class="carte__icone" aria-hidden="true">🏆</span>
+            <h3>Tableau d'honneur</h3>
+            <p>Les premiers de chaque classe avec photo, classe et moyenne, sur une affiche prête à imprimer ou à publier.</p>
+          </article>
+          <article class="carte">
+            <span class="carte__icone" aria-hidden="true">🪪</span>
+            <h3>Cartes scolaires</h3>
+            <p>Cartes d'identité scolaire avec photo, QR code de vérification, code-barres du matricule, signature et cachet.</p>
+          </article>
+          <article class="carte">
+            <span class="carte__icone" aria-hidden="true">💰</span>
+            <h3>Frais scolaires</h3>
+            <p>Barèmes par niveau, bourses et réductions, factures A4 et reçus A5 en FCFA avec le montant en lettres.</p>
+          </article>
+          <article class="carte">
+            <span class="carte__icone" aria-hidden="true">💼</span>
+            <h3>Personnel et paie</h3>
+            <p>Enseignants, contrats, éléments de salaire, avances et bulletins de paie générés automatiquement.</p>
+          </article>
+          <article class="carte">
+            <span class="carte__icone" aria-hidden="true">📅</span>
+            <h3>Emploi du temps et absences</h3>
+            <p>Emplois du temps par classe et par enseignant, suivi des absences et retards, sanctions et récompenses.</p>
+          </article>
+          <article class="carte">
+            <span class="carte__icone" aria-hidden="true">📄</span>
+            <h3>Documents officiels</h3>
+            <p>Certificats de scolarité, attestations, convocations, fiches de permission… avec l'en-tête de votre école.</p>
+          </article>
+          <article class="carte">
+            <span class="carte__icone" aria-hidden="true">📣</span>
+            <h3>Annonces et messagerie</h3>
+            <p>Annonces illustrées pour tous, les élèves, les parents ou les enseignants, messagerie interne et notifications.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== Démonstrations visuelles ===================== -->
+    <section class="section section--douce">
+      <div class="conteneur vitrine">
+        <div class="vitrine__texte">
+          <p class="etiquette">Tableau d'honneur</p>
+          <h2>Valorisez vos meilleurs élèves en un clic</h2>
+          <p>
+            Dès que les moyennes sont calculées, Gesti-Scolaire désigne les premiers de chaque classe et compose
+            une affiche aux couleurs de votre établissement : photos, noms, classes et moyennes.
+          </p>
+          <ul class="liste-coches">
+            <li>Le 1<sup>er</sup>, les 2 ou les 3 premiers de chaque classe</li>
+            <li>Affiche en image pour WhatsApp et les réseaux sociaux, ou en PDF à imprimer</li>
+            <li>Publiée comme annonce, visible par les parents et les élèves</li>
+          </ul>
+        </div>
+        <figure class="vitrine__visuel vitrine__visuel--affiche">
+          <img src="images/affiche-tableau-honneur.webp" width="900" height="1273" alt="Affiche du tableau d'honneur générée par Gesti-Scolaire" loading="lazy">
+        </figure>
+      </div>
+
+      <div class="conteneur vitrine vitrine--inverse">
+        <div class="vitrine__texte">
+          <p class="etiquette">Communication</p>
+          <h2>Les parents informés, sans courir après les papiers</h2>
+          <p>
+            Publiez une annonce avec ses photos : réunion, sortie, résultats, tableau d'honneur. Chacun la retrouve
+            sur son téléphone, même sans installer d'application.
+          </p>
+          <ul class="liste-coches">
+            <li>Annonces ciblées : tout le monde, élèves, parents ou enseignants</li>
+            <li>Jusqu'à 6 images par annonce, allégées automatiquement</li>
+            <li>Messagerie interne et notifications</li>
+          </ul>
+        </div>
+        <figure class="vitrine__visuel">
+          <div class="ecran"><img src="images/app-annonces.webp" width="1600" height="1000" alt="Page des annonces de Gesti-Scolaire avec une affiche publiée" loading="lazy"></div>
+        </figure>
+      </div>
+
+      <div class="conteneur vitrine">
+        <div class="vitrine__texte">
+          <p class="etiquette">Résultats scolaires</p>
+          <h2>Des moyennes justes, calculées pour vous</h2>
+          <p>
+            Saisissez les notes par évaluation : Gesti-Scolaire calcule les moyennes par matière avec les coefficients,
+            la moyenne générale, le rang et la mention de chaque élève, puis prépare les bulletins.
+          </p>
+          <ul class="liste-coches">
+            <li>Trimestres ou semestres, coefficients par matière</li>
+            <li>Bulletins PDF au format A4 ou A5</li>
+            <li>Exports Excel des résultats et des listes</li>
+          </ul>
+        </div>
+        <figure class="vitrine__visuel">
+          <div class="ecran"><img src="images/app-tableau-honneur.webp" width="1600" height="1000" alt="Les premiers de chaque classe avec leur moyenne dans Gesti-Scolaire" loading="lazy"></div>
+        </figure>
+      </div>
+    </section>
+
+    <!-- ===================== Profils ===================== -->
+    <section class="section" id="profils">
+      <div class="conteneur">
+        <header class="section__titre">
+          <p class="etiquette">Pour qui ?</p>
+          <h2>Chacun son espace, chacun ses droits</h2>
+          <p>Chaque utilisateur ne voit que ce qui le concerne.</p>
+        </header>
+        <div class="profils">
+          <article class="profil">
+            <h3>Direction</h3>
+            <p>Vue d'ensemble, statistiques, classes, personnel, documents officiels et validation des bulletins.</p>
+          </article>
+          <article class="profil">
+            <h3>Enseignants</h3>
+            <p>Carnet de notes, appel et absences, emploi du temps et annonces pour leurs classes.</p>
+          </article>
+          <article class="profil">
+            <h3>Comptable</h3>
+            <p>Frais scolaires, encaissements, reçus, factures, bourses et paie du personnel.</p>
+          </article>
+          <article class="profil">
+            <h3>Surveillant</h3>
+            <p>Absences, retards, sanctions et récompenses, vie scolaire au quotidien.</p>
+          </article>
+          <article class="profil">
+            <h3>Parents</h3>
+            <p>Notes, bulletins, absences et annonces de leurs enfants, sur leur téléphone.</p>
+          </article>
+          <article class="profil">
+            <h3>Élèves</h3>
+            <p>Leurs résultats, leur emploi du temps et les annonces de l'école.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== Sécurité ===================== -->
+    <section class="section section--sombre" id="securite">
+      <div class="conteneur">
+        <header class="section__titre section__titre--clair">
+          <p class="etiquette etiquette--claire">Sécurité et données</p>
+          <h2>Vos données sont protégées et récupérables</h2>
+        </header>
+        <div class="cartes cartes--trois">
+          <article class="carte carte--sombre">
+            <h3>Chaque école chez elle</h3>
+            <p>Les données de votre établissement sont strictement séparées de celles des autres écoles.</p>
+          </article>
+          <article class="carte carte--sombre">
+            <h3>Archives ZIP</h3>
+            <p>Téléchargez à tout moment une archive complète de vos données, avec des fichiers Excel lisibles.</p>
+          </article>
+          <article class="carte carte--sombre">
+            <h3>Corbeille 30 jours</h3>
+            <p>Un élève, une classe ou une note supprimés par erreur se restaurent en un clic, avec tout ce qui y était lié.</p>
+          </article>
+          <article class="carte carte--sombre">
+            <h3>Accès par rôle</h3>
+            <p>Comptes personnels, mots de passe protégés, droits adaptés à chaque fonction.</p>
+          </article>
+          <article class="carte carte--sombre">
+            <h3>Historique</h3>
+            <p>Les opérations sensibles sont tracées : vous savez qui a fait quoi, et quand.</p>
+          </article>
+          <article class="carte carte--sombre">
+            <h3>Plusieurs établissements</h3>
+            <p>Un groupe scolaire peut gérer plusieurs écoles et passer de l'une à l'autre en un clic.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== Mobile ===================== -->
+    <section class="section">
+      <div class="conteneur vitrine">
+        <div class="vitrine__texte">
+          <p class="etiquette">Sur téléphone</p>
+          <h2>Dans la poche des parents et des enseignants</h2>
+          <p>
+            Gesti-Scolaire s'utilise depuis le navigateur du téléphone et peut s'installer sur l'écran d'accueil comme
+            une application, sans passer par un magasin d'applications.
+          </p>
+          <ul class="liste-coches">
+            <li>Interface pensée pour le téléphone : menus en bas d'écran, fenêtres adaptées</li>
+            <li>Fonctionne sur ordinateur, tablette et téléphone</li>
+            <li>Aucune installation sur les ordinateurs de l'école</li>
+          </ul>
+        </div>
+        <figure class="vitrine__visuel vitrine__visuel--telephone">
+          <div class="telephone telephone--seul"><img src="images/app-mobile.webp" width="600" height="1298" alt="Gesti-Scolaire sur téléphone" loading="lazy"></div>
+        </figure>
+      </div>
+    </section>
+
+    <!-- ===================== Tarifs ===================== -->
+    <section class="section section--douce" id="tarifs">
+      <div class="conteneur">
+        <header class="section__titre">
+          <p class="etiquette">Tarifs</p>
+          <h2>Un abonnement adapté à votre établissement</h2>
+          <p>Le prix dépend de la taille de votre école. Choisissez la durée qui vous convient, tout est inclus.</p>
+        </header>
+        <div class="tarifs">
+          <article class="tarif">
+            <h3>3 mois</h3>
+            <p class="tarif__prix">Sur devis</p>
+            <p>Pour découvrir Gesti-Scolaire sur un trimestre.</p>
+          </article>
+          <article class="tarif">
+            <h3>6 mois</h3>
+            <p class="tarif__prix">Sur devis</p>
+            <p>Un semestre complet, du début à la fin.</p>
+          </article>
+          <article class="tarif tarif--vedette">
+            <span class="tarif__badge">Le plus choisi</span>
+            <h3>12 mois</h3>
+            <p class="tarif__prix">Sur devis</p>
+            <p>Toute l'année scolaire, de la rentrée aux résultats.</p>
+          </article>
+          <article class="tarif">
+            <h3>24 mois</h3>
+            <p class="tarif__prix">Sur devis</p>
+            <p>Deux années scolaires, l'esprit tranquille.</p>
+          </article>
+        </div>
+        <ul class="inclus">
+          <li>Tous les modules inclus</li>
+          <li>Comptes pour le personnel, les élèves et les parents</li>
+          <li>Mises à jour et nouveautés incluses</li>
+          <li>Données hébergées en ligne et archivables</li>
+        </ul>
+        <p class="centre"><a href="#contact" class="bouton bouton--principal bouton--grand">Recevoir un devis</a></p>
+      </div>
+    </section>
+
+    <!-- ===================== FAQ ===================== -->
+    <section class="section" id="faq">
+      <div class="conteneur conteneur--etroit">
+        <header class="section__titre">
+          <p class="etiquette">Questions fréquentes</p>
+          <h2>Vous vous posez peut-être ces questions</h2>
+        </header>
+        <div class="faq">
+          <details>
+            <summary>Faut-il installer quelque chose dans l'école ?</summary>
+            <p>Non. Gesti-Scolaire fonctionne en ligne, depuis un navigateur (Chrome, Edge, Firefox…), sur ordinateur, tablette ou téléphone. Une connexion internet suffit.</p>
+          </details>
+          <details>
+            <summary>Comment se passe le démarrage ?</summary>
+            <p>Nous créons l'espace de votre établissement et le compte de son administrateur. Vous ajoutez ensuite vos années scolaires, classes, matières, élèves et personnel, puis vous invitez vos enseignants et vos parents d'élèves.</p>
+          </details>
+          <details>
+            <summary>Les autres écoles peuvent-elles voir nos données ?</summary>
+            <p>Non. Chaque établissement dispose de son propre espace : ses élèves, notes, finances et documents ne sont visibles que par ses utilisateurs.</p>
+          </details>
+          <details>
+            <summary>Les parents doivent-ils payer ou installer une application ?</summary>
+            <p>Non. Les parents se connectent depuis le navigateur de leur téléphone et peuvent, s'ils le souhaitent, ajouter Gesti-Scolaire à leur écran d'accueil.</p>
+          </details>
+          <details>
+            <summary>Peut-on récupérer nos données ?</summary>
+            <p>Oui, à tout moment : la page « Archives » produit un fichier ZIP avec toutes vos données en Excel. Les listes d'élèves et d'enseignants s'exportent aussi en un clic.</p>
+          </details>
+          <details>
+            <summary>Que se passe-t-il à la fin de l'abonnement ?</summary>
+            <p>Vous êtes prévenu à l'avance. Si l'abonnement n'est pas renouvelé, l'accès est suspendu mais vos données sont conservées : elles redeviennent accessibles dès le renouvellement.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== Contact ===================== -->
+    <section class="section section--douce" id="contact">
+      <div class="conteneur contact">
+        <div class="contact__texte">
+          <p class="etiquette">Démonstration gratuite</p>
+          <h2>Voyons ensemble ce que Gesti-Scolaire peut faire pour votre école</h2>
+          <p>Laissez-nous vos coordonnées : nous vous rappelons pour organiser une démonstration, sans engagement.</p>
+          <ul class="coordonnees">
+            <li data-contact="telephone" hidden><span aria-hidden="true">📞</span> <a href="#"></a></li>
+            <li data-contact="whatsapp" hidden><span aria-hidden="true">💬</span> <a href="#" target="_blank" rel="noopener">Écrire sur WhatsApp</a></li>
+            <li data-contact="email" hidden><span aria-hidden="true">✉️</span> <a href="#"></a></li>
+          </ul>
+        </div>
+        <form class="formulaire" id="formulaire" novalidate>
+          <div class="formulaire__grille">
+            <label>Votre nom et prénom *
+              <input name="nom" required maxlength="150" autocomplete="name">
+            </label>
+            <label>Votre fonction
+              <input name="fonction" maxlength="100" placeholder="Directeur, promoteur, comptable…">
+            </label>
+            <label class="pleine">Nom de l'établissement *
+              <input name="etablissement" required maxlength="200" autocomplete="organization">
+            </label>
+            <label>Téléphone / WhatsApp *
+              <input name="telephone" type="tel" required maxlength="30" autocomplete="tel" placeholder="+223 …">
+            </label>
+            <label>Email
+              <input name="email" type="email" maxlength="254" autocomplete="email">
+            </label>
+            <label>Ville
+              <input name="ville" maxlength="100" autocomplete="address-level2">
+            </label>
+            <label>Nombre d'élèves
+              <select name="nb_eleves">
+                <option value="">Choisir…</option>
+                <option>Moins de 100</option>
+                <option>100 à 300</option>
+                <option>300 à 800</option>
+                <option>800 à 1 500</option>
+                <option>Plus de 1 500</option>
+              </select>
+            </label>
+            <label class="pleine">Votre message
+              <textarea name="message" rows="4" maxlength="2000" placeholder="Vos besoins, vos questions, vos disponibilités pour la démonstration…"></textarea>
+            </label>
+            <!-- Piège à robots : invisible pour les visiteurs -->
+            <label class="piege" aria-hidden="true">Site web <input name="site_web" tabindex="-1" autocomplete="off"></label>
+          </div>
+          <p class="formulaire__message" id="formulaire-message" role="status" aria-live="polite"></p>
+          <button type="submit" class="bouton bouton--principal bouton--grand bouton--plein">Être rappelé pour une démonstration</button>
+          <p class="formulaire__note">Vos coordonnées servent uniquement à vous recontacter au sujet de Gesti-Scolaire.</p>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <!-- ===================== Pied de page ===================== -->
+  <footer class="pied">
+    <div class="conteneur pied__grille">
+      <div>
+        <a href="#" class="logo logo--clair">
+          <span class="logo__icone" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10 12 5 2 10l10 5 10-5Z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+          </span>
+          Gesti-Scolaire
+        </a>
+        <p>Le logiciel de gestion scolaire pour les écoles, collèges et lycées.</p>
+      </div>
+      <nav aria-label="Liens du pied de page">
+        <a href="#fonctionnalites">Fonctionnalités</a>
+        <a href="#tarifs">Tarifs</a>
+        <a href="#faq">Questions</a>
+        <a href="#contact">Contact</a>
+        <a href="#" data-lien-app>Se connecter</a>
+      </nav>
+    </div>
+    <p class="conteneur pied__copyright">© <span id="annee"></span> Gesti-Scolaire. Tous droits réservés.</p>
+  </footer>
+</body>
+</html>

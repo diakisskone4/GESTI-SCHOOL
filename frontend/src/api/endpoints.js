@@ -186,5 +186,6 @@ export const plateformeApi = {
   },
   equipe: resource("/plateforme/equipe"),
   journal: resource("/plateforme/journal"),
+  demandes: resource("/plateforme/demandes"),
   inscriptionEquipe: (data) => api.post("/plateforme/inscription-equipe/", data).then((r) => r.data),
 };

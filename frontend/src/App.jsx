@@ -39,6 +39,7 @@ const ConsoleLayout = lazy(() => import("./pages/console/ConsoleLayout"));
 const ConsoleDashboard = lazy(() => import("./pages/console/ConsoleDashboard"));
 const ConsoleEtablissements = lazy(() => import("./pages/console/ConsoleEtablissements"));
 const ConsoleEquipe = lazy(() => import("./pages/console/ConsoleEquipe"));
+const ConsoleDemandes = lazy(() => import("./pages/console/ConsoleDemandes"));
 const InscriptionEquipe = lazy(() => import("./pages/console/InscriptionEquipe"));
 
 const ADMIN_ROLES = ["admin", "superadmin"];
@@ -63,6 +64,7 @@ export default function App() {
                 <Route path="/console" element={<ConsoleDashboard />} />
                 <Route path="/console/etablissements" element={<ConsoleEtablissements />} />
                 <Route path="/console/equipe" element={<ConsoleEquipe />} />
+                <Route path="/console/demandes" element={<ConsoleDemandes />} />
               </Route>
             </Route>
             <Route path="/inscription" element={<Register />} />

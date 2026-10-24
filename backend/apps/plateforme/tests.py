@@ -188,3 +188,49 @@ class TriConsoleTests(TestCase):
         self.assertEqual(sigles, ["ACT", "JAM"])
         sigles = [e["sigle"] for e in console.get("/api/v1/plateforme/etablissements/", {"ordering": "-nb_eleves", "search": "JAM"}).data["results"]]
         self.assertEqual(sigles, ["JAM"])
+
+
+class DemandesDemoTests(TestCase):
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()  # compteurs de limitation d'envois
+        self.anonyme = client_pour()
+        self.formulaire = {"nom": "Awa Traoré", "etablissement": "Lycée de Kati", "telephone": "+223 70 00 00 00",
+                           "ville": "Kati", "nb_eleves": "300 à 800", "message": "Nous voulons une démonstration."}
+
+    def test_demande_depuis_le_site_puis_suivi_dans_la_console(self):
+        from apps.plateforme.models import DemandeDemo
+
+        r = self.anonyme.post("/api/v1/public/demande-demo/", self.formulaire, format="json")
+        self.assertEqual(r.status_code, 201, r.data)
+        demande = DemandeDemo.objects.get()
+        self.assertEqual(demande.statut, "nouvelle")
+
+        dev = User.objects.create_user(email="d@p.ml", password=MOT_DE_PASSE, role="developpeur", first_name="D", last_name="P")
+        console = client_pour(dev)
+        self.assertEqual(console.get("/api/v1/plateforme/statistiques/").data["demandes_nouvelles"], 1)
+        [ligne] = console.get("/api/v1/plateforme/demandes/").data["results"]
+        self.assertEqual(ligne["etablissement"], "Lycée de Kati")
+        r = console.patch(f"/api/v1/plateforme/demandes/{demande.pk}/", {"statut": "en_cours", "notes": "Rappeler lundi",
+                                                                        "nom": "Pirate"}, format="json")
+        self.assertEqual(r.data["statut"], "en_cours")
+        self.assertEqual(r.data["nom"], "Awa Traoré")  # les données du prospect ne sont pas modifiables
+
+    def test_validation_robots_et_limite(self):
+        from apps.plateforme.models import DemandeDemo
+
+        r = self.anonyme.post("/api/v1/public/demande-demo/", {**self.formulaire, "telephone": "12"}, format="json")
+        self.assertEqual(r.status_code, 400)
+        r = self.anonyme.post("/api/v1/public/demande-demo/", {**self.formulaire, "site_web": "http://spam"}, format="json")
+        self.assertEqual(r.status_code, 201)
+        self.assertFalse(DemandeDemo.objects.exists())  # robot : rien d'enregistré
+        for _ in range(8):
+            self.anonyme.post("/api/v1/public/demande-demo/", self.formulaire, format="json")
+        self.assertEqual(self.anonyme.post("/api/v1/public/demande-demo/", self.formulaire, format="json").status_code, 429)
+
+    def test_liste_invisible_pour_les_etablissements(self):
+        etab, _, _ = creer_etablissement("ECO")
+        admin = User.objects.create_user(email="a@eco.ml", password="x", role="admin", etablissement_courant=etab)
+        admin.etablissements.add(etab)
+        self.assertEqual(client_pour(admin).get("/api/v1/plateforme/demandes/").status_code, 404)

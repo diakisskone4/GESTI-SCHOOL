@@ -16,9 +16,10 @@ from rest_framework.views import APIView
 
 from apps.accounts.models import User
 from apps.core.models import Etablissement
-from apps.plateforme.models import DUREES_MOIS, Abonnement, JournalConsole, ajouter_mois
+from apps.plateforme.models import DUREES_MOIS, Abonnement, DemandeDemo, JournalConsole, ajouter_mois
 from apps.plateforme.serializers import (
-    AdministrateurSerializer, DeveloppeurSerializer, EtablissementConsoleSerializer, InscriptionEquipeSerializer,
+    AdministrateurSerializer, DemandeDemoPubliqueSerializer, DemandeDemoSerializer, DeveloppeurSerializer,
+    EtablissementConsoleSerializer, InscriptionEquipeSerializer,
     JournalConsoleSerializer, creer_administrateur,
 )
 
@@ -169,6 +170,7 @@ class StatistiquesPlateformeView(APIView):
             "utilisateurs_actifs_7j": actifs_7j,
             "utilisateurs_actifs_30j": actifs_30j,
             "nb_developpeurs": User.objects.filter(role=User.Role.DEVELOPPEUR, is_active=True).count(),
+            "demandes_nouvelles": DemandeDemo.objects.filter(statut="nouvelle").count(),
             "activite_recente": JournalConsoleSerializer(
                 JournalConsole.objects.select_related("auteur")[:12], many=True,
             ).data,
@@ -342,3 +344,39 @@ class InscriptionEquipeView(APIView):
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
         return Response(DeveloppeurSerializer(user).data, status=status.HTTP_201_CREATED)
+
+
+class DemandeDemoPubliqueView(APIView):
+    """Formulaire « Demander une démonstration » du site vitrine (public, limité à quelques envois par heure)."""
+    swagger_schema = None
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    throttle_scope = "contact"
+
+    def post(self, request):
+        serializer = DemandeDemoPubliqueSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        donnees = dict(serializer.validated_data)
+        if donnees.pop("site_web", ""):
+            # Robot détecté (champ invisible rempli) : on répond comme d'habitude sans rien enregistrer
+            return Response({"detail": "Merci, votre demande a bien été envoyée."}, status=status.HTTP_201_CREATED)
+        adresse = (request.META.get("HTTP_X_FORWARDED_FOR") or request.META.get("REMOTE_ADDR") or "").split(",")[0].strip()
+        DemandeDemo.objects.create(**donnees, adresse_ip=adresse or None)
+        return Response({"detail": "Merci, votre demande a bien été envoyée. Nous vous recontactons très vite."},
+                        status=status.HTTP_201_CREATED)
+
+
+class DemandeDemoViewSet(mixins.ListModelMixin, mixins.UpdateModelMixin, mixins.DestroyModelMixin, viewsets.GenericViewSet):
+    """Demandes reçues depuis le site vitrine : suivi par l'équipe (statut, notes)."""
+    serializer_class = DemandeDemoSerializer
+    swagger_schema = None
+    permission_classes = [EstDeveloppeur]
+    pagination_class = PaginationConsole
+    queryset = DemandeDemo.objects.all()
+    filterset_fields = ["statut"]
+    search_fields = ["nom", "etablissement", "ville", "telephone", "email"]
+
+    def perform_update(self, serializer):
+        demande = serializer.save()
+        journaliser(self.request, "modification", details=f"Demande de {demande.etablissement} : {demande.get_statut_display()}",
+                    nom=demande.etablissement)
