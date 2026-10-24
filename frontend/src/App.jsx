@@ -21,6 +21,7 @@ import CartesScolairesPage from "./pages/students/CartesScolairesPage";
 import LiensParentsElevesPage from "./pages/students/LiensParentsElevesPage";
 import EnseignantsPage from "./pages/staff/EnseignantsPage";
 import BulletinsPage from "./pages/academics/BulletinsPage";
+import TableauHonneurPage from "./pages/academics/TableauHonneurPage";
 import DocumentsPage from "./pages/documents/DocumentsPage";
 import FacturesPage from "./pages/finance/FacturesPage";
 import PaiePage from "./pages/payroll/PaiePage";
@@ -94,6 +95,7 @@ export default function App() {
 
                 <Route element={<ProtectedRoute roles={ACADEMIC_ROLES} />}>
                   <Route path="/academique/bulletins" element={<BulletinsPage />} />
+                  <Route path="/tableau-honneur" element={<TableauHonneurPage />} />
                 </Route>
 
                 <Route element={<ProtectedRoute roles={VIE_SCOLAIRE_ROLES} />}>

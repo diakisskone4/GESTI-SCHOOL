@@ -99,6 +99,13 @@ export const bulletinsApi = {
   pdfPathA5: (id) => `/bulletins/${id}/pdf/?taille=a5`,
 };
 export const tableauxHonneurApi = resource("/tableaux-honneur");
+/** Tableau d'honneur des premiers de chaque classe (lu dans les bulletins) et son affiche. */
+export const tableauHonneurApi = {
+  laureats: (params) => api.get("/tableau-honneur/laureats/", { params }).then((r) => r.data),
+  calculer: (periode) => api.post("/tableau-honneur/calculer/", { periode }).then((r) => r.data),
+  affichePath: (periode, nombre, fichier = "png") => `/tableau-honneur/affiche/?periode=${periode}&nombre=${nombre}&fichier=${fichier}`,
+  publier: (data) => api.post("/tableau-honneur/publier/", data).then((r) => r.data),
+};
 export const examensApi = resource("/examens");
 export const exportsApi = {
   excelPath: (classe, periode) => `/exports/excel/?classe=${classe}&periode=${periode}`,

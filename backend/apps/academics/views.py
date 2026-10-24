@@ -346,3 +346,126 @@ class ExportResultatsView(viewsets.ViewSet):
         )
         response["Content-Disposition"] = "attachment; filename=resultats.xlsx"
         return response
+
+
+class PremiersDeClasseView(viewsets.ViewSet):
+    """Tableau d'honneur des premiers de chaque classe (lus dans les bulletins) et son affiche.
+
+    GET  /tableau-honneur/laureats/?periode=&nombre=   lauréats par classe (nombre = 1 à 3 premiers)
+    POST /tableau-honneur/calculer/  {periode}           calcule moyennes et rangs de toutes les classes
+    GET  /tableau-honneur/affiche/?periode=&nombre=&fichier=png|pdf
+    POST /tableau-honneur/publier/   {periode, nombre, titre, message, public_cible, epinglee}
+    """
+
+    def get_permissions(self):
+        if self.action in ("calculer", "publier"):
+            return [IsAdmin()]
+        from apps.core.permissions import IsEnseignant
+
+        return [IsEnseignant()]
+
+    def _contexte(self, source):
+        from apps.core.models import Etablissement
+
+        etablissement_id = verifier_etablissement(self.request.user, source.get("etablissement"))
+        if not etablissement_id:
+            raise serializers.ValidationError({"etablissement": "Choisissez d'abord un établissement."})
+        etablissement = get_object_or_404(Etablissement, pk=etablissement_id)
+        periode = get_object_or_404(
+            Periode.objects.select_related("annee_scolaire"), pk=source.get("periode"),
+            annee_scolaire__etablissement=etablissement,
+        )
+        try:
+            nombre = min(max(int(source.get("nombre") or 1), 1), 3)
+        except (TypeError, ValueError):
+            nombre = 1
+        return etablissement, periode, nombre
+
+    @action(detail=False, methods=["get"])
+    def laureats(self, request):
+        from apps.academics.tableau_honneur import laureats
+
+        etablissement, periode, nombre = self._contexte(request.query_params)
+        resultats, sans_resultats = laureats(etablissement, periode, nombre)
+        return Response({
+            "periode": {"id": periode.pk, "libelle": periode.libelle, "annee_scolaire": periode.annee_scolaire.libelle},
+            "nombre": nombre,
+            "classes": [
+                {
+                    "id": classe.pk, "nom": classe.nom, "niveau": classe.niveau.nom,
+                    "laureats": [
+                        {
+                            "eleve_id": str(b.inscription.eleve_id), "prenom": b.inscription.eleve.prenom,
+                            "nom": b.inscription.eleve.nom, "matricule": b.inscription.eleve.matricule,
+                            "sexe": b.inscription.eleve.sexe, "moyenne": b.moyenne_generale, "rang": b.rang,
+                            "effectif": b.effectif_classe, "mention": b.mention,
+                            "photo": request.build_absolute_uri(b.inscription.eleve.photo.url) if b.inscription.eleve.photo else None,
+                        }
+                        for b in bulletins
+                    ],
+                }
+                for classe, bulletins in resultats
+            ],
+            "classes_sans_resultats": [{"id": c.pk, "nom": c.nom} for c in sans_resultats],
+        })
+
+    @action(detail=False, methods=["post"])
+    def calculer(self, request):
+        from apps.academics.tableau_honneur import calculer_toutes_les_classes
+
+        etablissement, periode, _ = self._contexte(request.data)
+        with transaction.atomic():
+            nombre = calculer_toutes_les_classes(etablissement, periode)
+        return Response({"detail": f"Moyennes et rangs calculés pour {nombre} classe(s) — {periode.libelle}."})
+
+    @action(detail=False, methods=["get"])
+    def affiche(self, request):
+        from apps.academics.tableau_honneur import affiche_en_octets, generer_affiche, laureats
+
+        etablissement, periode, nombre = self._contexte(request.query_params)
+        resultats, _ = laureats(etablissement, periode, nombre)
+        # « fichier » et non « format » : ?format= est réservé par Django REST Framework
+        format_fichier = "pdf" if request.query_params.get("fichier") == "pdf" else "png"
+        contenu = affiche_en_octets(generer_affiche(etablissement, periode, resultats), format_fichier)
+        reponse = HttpResponse(contenu, content_type="application/pdf" if format_fichier == "pdf" else "image/png")
+        nom = f"tableau_honneur_{etablissement.sigle}_{periode.libelle}".replace(" ", "_")
+        reponse["Content-Disposition"] = f'inline; filename="{nom}.{format_fichier}"'
+        return reponse
+
+    @action(detail=False, methods=["post"])
+    def publier(self, request):
+        """Publie l'affiche comme annonce (visible selon le public choisi), avec la liste des lauréats en texte."""
+        from apps.academics.tableau_honneur import affiche_en_octets, generer_affiche, laureats, moyenne_texte, rang_texte
+        from apps.communication.models import Annonce, ImageAnnonce
+        from apps.communication.serializers import AnnonceSerializer
+
+        etablissement, periode, nombre = self._contexte(request.data)
+        resultats, _ = laureats(etablissement, periode, nombre)
+        if not resultats:
+            raise serializers.ValidationError({"detail": "Aucun lauréat pour cette période : calculez d'abord les moyennes."})
+        public = request.data.get("public_cible") or "tous"
+        if public not in dict(Annonce.PUBLIC_CHOICES) or public == "classe":
+            raise serializers.ValidationError({"public_cible": "Public cible invalide."})
+
+        lignes = [str(request.data.get("message") or "").strip() or
+                  f"Félicitations aux meilleurs élèves du {periode.libelle} ({periode.annee_scolaire.libelle}) !", ""]
+        for classe, bulletins in resultats:
+            for b in bulletins:
+                eleve = b.inscription.eleve
+                rang = f"{rang_texte(b.rang)} — " if nombre > 1 else ""
+                lignes.append(f"• {classe.nom} : {rang}{eleve.prenom} {eleve.nom.upper()} — {moyenne_texte(b.moyenne_generale)}/20")
+        image = generer_affiche(etablissement, periode, resultats)
+        contenu = affiche_en_octets(image, "jpeg")
+        titre = str(request.data.get("titre") or "").strip() or f"Tableau d'honneur — {periode.libelle}"
+        epinglee = str(request.data.get("epinglee", "true")).lower() in ("true", "1", "on")
+
+        with transaction.atomic():
+            annonce = Annonce.objects.create(
+                etablissement=etablissement, auteur=request.user, titre=titre[:200], contenu="\n".join(lignes),
+                public_cible=public, epinglee=epinglee,
+            )
+            ImageAnnonce.objects.create(
+                annonce=annonce, contenu=contenu, type_mime="image/jpeg", nom_fichier=f"tableau_honneur_{periode.libelle}.jpg",
+                largeur=image.width, hauteur=image.height, taille=len(contenu),
+            )
+        return Response(AnnonceSerializer(annonce, context={"request": request}).data, status=status.HTTP_201_CREATED)
