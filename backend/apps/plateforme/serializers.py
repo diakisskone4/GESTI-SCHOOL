@@ -187,10 +187,21 @@ class DemandeDemoPubliqueSerializer(serializers.ModelSerializer):
 
 class DemandeDemoSerializer(serializers.ModelSerializer):
     statut_label = serializers.CharField(source="get_statut_display", read_only=True)
+    reference = serializers.CharField(read_only=True)
+    pris_en_charge_par_nom = serializers.SerializerMethodField()
+    est_a_moi = serializers.SerializerMethodField()
 
     class Meta:
         model = DemandeDemo
-        fields = ["id", "nom", "etablissement", "fonction", "telephone", "email", "ville", "nb_eleves", "message",
-                  "statut", "statut_label", "notes", "cree_le", "modifie_le"]
+        fields = ["id", "reference", "nom", "etablissement", "fonction", "telephone", "email", "ville", "nb_eleves",
+                  "message", "statut", "statut_label", "notes", "pris_en_charge_par", "pris_en_charge_par_nom",
+                  "pris_en_charge_le", "est_a_moi", "cree_le", "modifie_le"]
         read_only_fields = ["nom", "etablissement", "fonction", "telephone", "email", "ville", "nb_eleves", "message",
-                            "cree_le", "modifie_le"]
+                            "pris_en_charge_par", "pris_en_charge_le", "cree_le", "modifie_le"]
+
+    def get_pris_en_charge_par_nom(self, obj):
+        return obj.pris_en_charge_par.get_full_name() if obj.pris_en_charge_par else None
+
+    def get_est_a_moi(self, obj):
+        request = self.context.get("request")
+        return bool(request and obj.pris_en_charge_par_id == request.user.pk)

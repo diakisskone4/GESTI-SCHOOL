@@ -53,8 +53,9 @@
   menu.addEventListener("click", function (e) { if (e.target.closest("a")) basculerMenu(false); });
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") basculerMenu(false); });
 
-  // ---------- Formulaire de démonstration ----------
+  // ---------- Formulaire de démonstration (page /contact) ----------
   var formulaire = document.getElementById("formulaire");
+  if (!formulaire) return;
   var message = document.getElementById("formulaire-message");
   var bouton = formulaire.querySelector('button[type="submit"]');
   var texteBouton = bouton.textContent;
@@ -107,7 +108,9 @@
       .then(function (r) {
         if (r.ok) {
           formulaire.reset();
-          afficher(r.corps.detail || "Merci, votre demande a bien été envoyée.", "ok");
+          var texte = r.corps.detail || "Merci, votre demande a bien été envoyée.";
+          if (r.corps.reference) texte += " Votre numéro de demande : " + r.corps.reference + ".";
+          afficher(texte, "ok");
         } else if (r.statut === 429) {
           afficher("Trop de demandes envoyées. Réessayez dans un moment ou contactez-nous directement.", "erreur");
         } else {

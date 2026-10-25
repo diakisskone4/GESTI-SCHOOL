@@ -234,3 +234,49 @@ class DemandesDemoTests(TestCase):
         admin = User.objects.create_user(email="a@eco.ml", password="x", role="admin", etablissement_courant=etab)
         admin.etablissements.add(etab)
         self.assertEqual(client_pour(admin).get("/api/v1/plateforme/demandes/").status_code, 404)
+
+
+class NotificationsDemandesTests(TestCase):
+    def setUp(self):
+        from django.core.cache import cache
+
+        cache.clear()
+        self.awa = User.objects.create_user(email="awa@p.ml", password=MOT_DE_PASSE, role="developpeur", first_name="Awa", last_name="Diallo")
+        self.issa = User.objects.create_user(email="issa@p.ml", password=MOT_DE_PASSE, role="developpeur", first_name="Issa", last_name="Kone")
+        self.console_awa, self.console_issa = client_pour(self.awa), client_pour(self.issa)
+
+    def envoyer(self, etablissement):
+        r = client_pour().post("/api/v1/public/demande-demo/", {
+            "nom": "Parent", "etablissement": etablissement, "telephone": "+223 70 11 22 33"}, format="json")
+        self.assertEqual(r.status_code, 201, r.data)
+        return r
+
+    def test_reference_notifications_et_prise_en_charge(self):
+        from apps.plateforme.models import DemandeDemo
+
+        r = self.envoyer("Lycée A")
+        self.assertRegex(r.data["reference"], r"^DEM-\d{6}$")
+        self.envoyer("École B")
+        notif = self.console_awa.get("/api/v1/plateforme/demandes/notifications/").data
+        self.assertEqual(notif["nouvelles"], 2)
+        self.assertEqual(notif["dernieres"][0]["etablissement"], "École B")  # la plus récente d'abord
+
+        demande = DemandeDemo.objects.get(etablissement="Lycée A")
+        r = self.console_awa.post(f"/api/v1/plateforme/demandes/{demande.pk}/prendre_en_charge/")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual((r.data["statut"], r.data["pris_en_charge_par_nom"], r.data["est_a_moi"]), ("en_cours", "Awa Diallo", True))
+        self.assertEqual(self.console_issa.get("/api/v1/plateforme/demandes/notifications/").data["nouvelles"], 1)
+        self.assertEqual(self.console_awa.get("/api/v1/plateforme/demandes/notifications/").data["mes_en_cours"], 1)
+
+        # Issa ne peut pas la reprendre sans confirmer
+        r = self.console_issa.post(f"/api/v1/plateforme/demandes/{demande.pk}/prendre_en_charge/")
+        self.assertEqual(r.status_code, 409)
+        self.assertIn("Awa Diallo", r.data["detail"])
+        r = self.console_issa.post(f"/api/v1/plateforme/demandes/{demande.pk}/prendre_en_charge/", {"forcer": True}, format="json")
+        self.assertEqual(r.data["pris_en_charge_par_nom"], "Issa Kone")
+
+        mes = self.console_issa.get("/api/v1/plateforme/demandes/", {"mes": 1}).data["results"]
+        self.assertEqual([d["etablissement"] for d in mes], ["Lycée A"])
+        r = self.console_issa.post(f"/api/v1/plateforme/demandes/{demande.pk}/liberer/")
+        self.assertEqual((r.data["statut"], r.data["pris_en_charge_par"]), ("nouvelle", None))
+        self.assertEqual(self.console_awa.get("/api/v1/plateforme/demandes/notifications/").data["nouvelles"], 2)

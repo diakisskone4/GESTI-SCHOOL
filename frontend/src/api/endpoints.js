@@ -186,6 +186,11 @@ export const plateformeApi = {
   },
   equipe: resource("/plateforme/equipe"),
   journal: resource("/plateforme/journal"),
-  demandes: resource("/plateforme/demandes"),
+  demandes: {
+    ...resource("/plateforme/demandes"),
+    notifications: () => api.get("/plateforme/demandes/notifications/").then((r) => r.data),
+    prendreEnCharge: (id, forcer = false) => api.post(`/plateforme/demandes/${id}/prendre_en_charge/`, { forcer }).then((r) => r.data),
+    liberer: (id) => api.post(`/plateforme/demandes/${id}/liberer/`).then((r) => r.data),
+  },
   inscriptionEquipe: (data) => api.post("/plateforme/inscription-equipe/", data).then((r) => r.data),
 };

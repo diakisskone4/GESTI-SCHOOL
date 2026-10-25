@@ -1,6 +1,7 @@
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { Inbox, LayoutDashboard, LogOut, School, ShieldCheck, Users } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import NotificationsDemandes from "./NotificationsDemandes";
 
 const ONGLETS = [
   { label: "Tableau de bord", to: "/console", icon: LayoutDashboard, end: true },
@@ -34,6 +35,7 @@ export default function ConsoleLayout() {
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <NotificationsDemandes />
             <span className="hidden text-right text-xs text-slate-300 sm:block">
               <span className="block font-semibold text-white">{user?.full_name}</span>
               {user?.email}

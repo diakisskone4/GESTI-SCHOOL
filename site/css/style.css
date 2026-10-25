@@ -214,3 +214,24 @@ p { margin: 0 0 1em; }
 .pied nav a { color: #d9cfff; text-decoration: none; font-weight: 600; }
 .pied nav a:hover { color: #fff; }
 .pied__copyright { margin-top: 40px; padding-top: 22px; border-top: 1px solid rgba(255, 255, 255, 0.1); font-size: 0.88rem; }
+
+/* ---------- Appel à l'action (accueil) ---------- */
+.appel { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 28px; padding: 44px;
+  border-radius: 24px; background: linear-gradient(135deg, var(--violet-nuit), var(--violet-fonce)); color: #d9cfff; }
+.appel h2 { color: #fff; }
+.appel p { margin: 0; max-width: 620px; }
+.appel .etiquette { background: rgba(255, 255, 255, 0.12); color: #fde68a; }
+.appel .bouton--principal { background: #fff; color: var(--violet-fonce); box-shadow: none; }
+.appel .bouton--principal:hover { background: var(--or-pale); }
+@media (max-width: 640px) { .appel { padding: 28px 22px; } }
+
+/* ---------- Page contact ---------- */
+.page-contact { padding-top: 64px; }
+.page-contact h1 { font-size: clamp(1.9rem, 4vw, 2.7rem); }
+.etapes { list-style: none; counter-reset: etape; padding: 0; margin: 28px 0 0; display: grid; gap: 16px; }
+.etapes li { counter-increment: etape; position: relative; padding-left: 52px; display: grid; gap: 2px; }
+.etapes li::before { content: counter(etape); position: absolute; left: 0; top: 0; width: 36px; height: 36px; border-radius: 50%;
+  display: grid; place-items: center; background: var(--violet); color: #fff; font-weight: 800; }
+.etapes strong { color: var(--encre); }
+.etapes span { color: var(--texte-doux); font-size: 0.95rem; }
+.formulaire__message--ok { padding: 12px 14px; border-radius: 12px; background: #ecfdf5; }

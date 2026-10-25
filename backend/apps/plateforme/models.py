@@ -111,6 +111,10 @@ class DemandeDemo(models.Model):
     message = models.TextField(blank=True)
     statut = models.CharField(max_length=12, choices=STATUT_CHOICES, default="nouvelle", db_index=True)
     notes = models.TextField(blank=True, help_text="Notes internes de l'équipe")
+    pris_en_charge_par = models.ForeignKey(
+        "accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="demandes_suivies",
+    )
+    pris_en_charge_le = models.DateTimeField(null=True, blank=True)
     adresse_ip = models.GenericIPAddressField(null=True, blank=True)
     cree_le = models.DateTimeField(auto_now_add=True, db_index=True)
     modifie_le = models.DateTimeField(auto_now=True)
@@ -122,3 +126,8 @@ class DemandeDemo(models.Model):
 
     def __str__(self):
         return f"{self.etablissement} — {self.nom} ({self.cree_le:%d/%m/%Y})"
+
+    @property
+    def reference(self):
+        """Numéro communiqué au demandeur, ex. DEM-000042."""
+        return f"DEM-{self.pk:06d}"

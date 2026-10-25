@@ -4,6 +4,7 @@ import hmac
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Count, F, Max, Prefetch, Q
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
@@ -361,20 +362,71 @@ class DemandeDemoPubliqueView(APIView):
             # Robot détecté (champ invisible rempli) : on répond comme d'habitude sans rien enregistrer
             return Response({"detail": "Merci, votre demande a bien été envoyée."}, status=status.HTTP_201_CREATED)
         adresse = (request.META.get("HTTP_X_FORWARDED_FOR") or request.META.get("REMOTE_ADDR") or "").split(",")[0].strip()
-        DemandeDemo.objects.create(**donnees, adresse_ip=adresse or None)
-        return Response({"detail": "Merci, votre demande a bien été envoyée. Nous vous recontactons très vite."},
-                        status=status.HTTP_201_CREATED)
+        demande = DemandeDemo.objects.create(**donnees, adresse_ip=adresse or None)
+        return Response({
+            "detail": "Merci, votre demande a bien été envoyée. Nous vous recontactons très vite.",
+            "reference": demande.reference,
+        }, status=status.HTTP_201_CREATED)
 
 
 class DemandeDemoViewSet(mixins.ListModelMixin, mixins.UpdateModelMixin, mixins.DestroyModelMixin, viewsets.GenericViewSet):
-    """Demandes reçues depuis le site vitrine : suivi par l'équipe (statut, notes)."""
+    """Demandes reçues depuis le site vitrine : notifications, prise en charge et suivi par l'équipe.
+
+    ?mes=1 : uniquement les demandes prises en charge par le membre connecté.
+    """
     serializer_class = DemandeDemoSerializer
     swagger_schema = None
     permission_classes = [EstDeveloppeur]
     pagination_class = PaginationConsole
-    queryset = DemandeDemo.objects.all()
     filterset_fields = ["statut"]
     search_fields = ["nom", "etablissement", "ville", "telephone", "email"]
+
+    def get_queryset(self):
+        qs = DemandeDemo.objects.select_related("pris_en_charge_par")
+        if self.request.query_params.get("mes") in ("1", "true"):
+            qs = qs.filter(pris_en_charge_par=self.request.user)
+        return qs
+
+    @action(detail=False, methods=["get"])
+    def notifications(self, request):
+        """Boîte de notifications de la console : nouvelles demandes (non prises en charge) et les miennes en cours."""
+        nouvelles = DemandeDemo.objects.filter(statut="nouvelle", pris_en_charge_par__isnull=True)
+        return Response({
+            "nouvelles": nouvelles.count(),
+            "mes_en_cours": DemandeDemo.objects.filter(pris_en_charge_par=request.user, statut="en_cours").count(),
+            "dernieres": self.get_serializer(nouvelles.select_related("pris_en_charge_par")[:8], many=True).data,
+        })
+
+    @action(detail=True, methods=["post"])
+    def prendre_en_charge(self, request, pk=None):
+        """Le membre connecté s'attribue la demande. Si un collègue l'a déjà prise, il faut confirmer (?forcer=1)."""
+        with transaction.atomic():
+            demande = get_object_or_404(DemandeDemo.objects.select_for_update(), pk=pk)
+            forcer = str(request.data.get("forcer", "")).lower() in ("1", "true")
+            if demande.pris_en_charge_par_id and demande.pris_en_charge_par_id != request.user.pk and not forcer:
+                return Response({
+                    "detail": f"{demande.pris_en_charge_par.get_full_name()} s'occupe déjà de cette demande.",
+                    "code": "deja_prise",
+                }, status=status.HTTP_409_CONFLICT)
+            demande.pris_en_charge_par = request.user
+            demande.pris_en_charge_le = timezone.now()
+            if demande.statut == "nouvelle":
+                demande.statut = "en_cours"
+            demande.save(update_fields=["pris_en_charge_par", "pris_en_charge_le", "statut", "modifie_le"])
+        journaliser(request, "modification", details=f"Demande {demande.reference} prise en charge", nom=demande.etablissement)
+        return Response(self.get_serializer(demande).data)
+
+    @action(detail=True, methods=["post"])
+    def liberer(self, request, pk=None):
+        """Rend la demande à l'équipe (elle redevient « nouvelle » si elle n'avait pas encore avancé)."""
+        demande = self.get_object()
+        demande.pris_en_charge_par = None
+        demande.pris_en_charge_le = None
+        if demande.statut == "en_cours":
+            demande.statut = "nouvelle"
+        demande.save(update_fields=["pris_en_charge_par", "pris_en_charge_le", "statut", "modifie_le"])
+        journaliser(request, "modification", details=f"Demande {demande.reference} rendue à l'équipe", nom=demande.etablissement)
+        return Response(self.get_serializer(demande).data)
 
     def perform_update(self, serializer):
         demande = serializer.save()
