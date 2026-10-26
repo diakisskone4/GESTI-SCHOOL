@@ -99,6 +99,14 @@ export const bulletinsApi = {
   pdfPathA5: (id) => `/bulletins/${id}/pdf/?taille=a5`,
 };
 export const tableauxHonneurApi = resource("/tableaux-honneur");
+/** Passage en classe supérieure : décisions de fin d'année et transfert vers l'année suivante. */
+export const passagesApi = {
+  vue: (params) => api.get("/passages/", { params }).then((r) => r.data),
+  calculer: (annee) => api.post("/passages/calculer/", { annee }).then((r) => r.data),
+  modifier: (id, decision, motif = "") => api.patch(`/passages/${id}/`, { decision, motif }).then((r) => r.data),
+  transferer: (annee) => api.post("/passages/transferer/", { annee }).then((r) => r.data),
+  annuler: (annee) => api.post("/passages/annuler/", { annee }).then((r) => r.data),
+};
 /** Tableau d'honneur des premiers de chaque classe (lu dans les bulletins) et son affiche. */
 export const tableauHonneurApi = {
   laureats: (params) => api.get("/tableau-honneur/laureats/", { params }).then((r) => r.data),

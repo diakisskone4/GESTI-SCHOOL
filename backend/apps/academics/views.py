@@ -469,3 +469,131 @@ class PremiersDeClasseView(viewsets.ViewSet):
                 largeur=image.width, hauteur=image.height, taille=len(contenu),
             )
         return Response(AnnonceSerializer(annonce, context={"request": request}).data, status=status.HTTP_201_CREATED)
+
+
+class PassagesView(viewsets.ViewSet):
+    """Passage en classe supérieure (fin d'année) : décisions par classe, modification, transfert.
+
+    GET   /passages/?annee=            vue d'ensemble (année courante par défaut)
+    POST  /passages/calculer/          recalcule les décisions automatiques
+    PATCH /passages/<decision_id>/     décision du conseil de classe {decision: admis|redouble|fin_cycle|auto, motif}
+    POST  /passages/transferer/        inscrit les élèves dans l'année suivante
+    POST  /passages/annuler/           annule le transfert (inscriptions sans notes)
+    """
+
+    def get_permissions(self):
+        if self.action == "list":
+            from apps.core.permissions import IsEnseignant
+
+            return [IsEnseignant()]
+        return [IsAdmin()]
+
+    def _annee(self, source):
+        from apps.core.models import AnneeScolaire, Etablissement
+
+        etablissement_id = verifier_etablissement(self.request.user, source.get("etablissement"))
+        if not etablissement_id:
+            raise serializers.ValidationError({"etablissement": "Choisissez d'abord un établissement."})
+        etablissement = get_object_or_404(Etablissement, pk=etablissement_id)
+        annees = AnneeScolaire.objects.filter(etablissement=etablissement)
+        if source.get("annee"):
+            annee = get_object_or_404(annees, pk=source.get("annee"))
+        else:
+            annee = annees.filter(est_courante=True).first() or annees.order_by("-date_debut").first()
+            if annee is None:
+                raise serializers.ValidationError({"detail": "Aucune année scolaire."})
+        return etablissement, annee
+
+    def list(self, request):
+        from apps.academics.models import DecisionPassage
+        from apps.academics.passages import annee_suivante, derniere_periode, libelle_decision, niveau_suivant
+
+        etablissement, annee = self._annee(request.query_params)
+        periodes = list(Periode.objects.filter(annee_scolaire=annee).order_by("numero"))
+        derniere = derniere_periode(annee)
+        decisions = {
+            d.inscription_id: d for d in DecisionPassage.objects.filter(inscription__annee_scolaire=annee)
+            .select_related("inscription_suivante__classe")
+        }
+        moyennes = {}
+        for b in Bulletin.objects.filter(periode__annee_scolaire=annee, moyenne_generale__isnull=False).values(
+                "inscription_id", "periode_id", "moyenne_generale"):
+            moyennes.setdefault(b["inscription_id"], {})[b["periode_id"]] = b["moyenne_generale"]
+
+        classes = []
+        totaux = {"admis": 0, "redouble": 0, "fin_cycle": 0, "sans_resultat": 0, "transferes": 0}
+        for classe in Classe.objects.filter(etablissement=etablissement, annee_scolaire=annee).select_related("niveau").order_by("niveau__ordre", "nom"):
+            suivant = niveau_suivant(classe.niveau)
+            eleves = []
+            for insc in classe.inscriptions.filter(annee_scolaire=annee, statut="active").select_related("eleve"):
+                d = decisions.get(insc.pk)
+                if d is None:
+                    totaux["sans_resultat"] += 1
+                else:
+                    totaux[d.decision] += 1
+                    totaux["transferes"] += bool(d.inscription_suivante_id)
+                eleves.append({
+                    "inscription": str(insc.pk), "eleve": f"{insc.eleve.prenom} {insc.eleve.nom.upper()}",
+                    "matricule": insc.eleve.matricule,
+                    "moyennes": [moyennes.get(insc.pk, {}).get(p.pk) for p in periodes],
+                    "decision": None if d is None else {
+                        "id": d.pk, "decision": d.decision, "libelle": libelle_decision(d), "admis": d.est_admis,
+                        "moyenne_annuelle": d.moyenne_annuelle, "rang": d.rang_annuel, "manuelle": d.manuelle, "motif": d.motif,
+                        "transfere_vers": d.inscription_suivante.classe.nom if d.inscription_suivante_id else None,
+                    },
+                })
+            eleves.sort(key=lambda e: (e["decision"] is None, e["decision"]["rang"] if e["decision"] else 0, e["eleve"]))
+            classes.append({"id": classe.pk, "nom": classe.nom, "niveau": classe.niveau.nom,
+                            "niveau_suivant": suivant.nom if suivant else None, "eleves": eleves})
+        suivante = annee_suivante(annee)
+        return Response({
+            "annee": {"id": annee.pk, "libelle": annee.libelle},
+            "seuil": etablissement.moyenne_passage,
+            "etablissement": etablissement.pk,
+            "periodes": [{"id": p.pk, "libelle": p.libelle} for p in periodes],
+            "derniere_periode": derniere.libelle if derniere else None,
+            "annee_suivante": suivante.libelle if suivante else None,
+            "totaux": totaux,
+            "classes": classes,
+        })
+
+    @action(detail=False, methods=["post"])
+    def calculer(self, request):
+        from apps.academics.passages import calculer_decisions_annee
+
+        etablissement, annee = self._annee(request.data)
+        with transaction.atomic():
+            nombre = calculer_decisions_annee(etablissement, annee)
+        return Response({"detail": f"{nombre} décision(s) calculée(s) pour {annee.libelle}."})
+
+    def partial_update(self, request, pk=None):
+        from apps.academics.models import DecisionPassage
+        from apps.academics.passages import modifier_decision
+
+        etablissement, _ = self._annee({})
+        decision = get_object_or_404(DecisionPassage.objects.select_related("inscription__classe__niveau"),
+                                     pk=pk, inscription__classe__etablissement=etablissement)
+        modifier_decision(decision, request.data.get("decision"), request.data.get("motif", ""))
+        return Response({"detail": "Décision enregistrée."})
+
+    @action(detail=False, methods=["post"])
+    def transferer(self, request):
+        from apps.academics.passages import transferer
+
+        etablissement, annee = self._annee(request.data)
+        resume = transferer(etablissement, annee)
+        return Response({**resume, "detail": (
+            f"Transfert vers {resume['annee_suivante']} : {resume['admis']} élève(s) en classe supérieure, "
+            f"{resume['redoublants']} redoublant(s), {resume['fin_cycle']} en fin de cycle."
+        )})
+
+    @action(detail=False, methods=["post"])
+    def annuler(self, request):
+        from apps.academics.passages import annuler_transfert
+
+        etablissement, annee = self._annee(request.data)
+        resultat = annuler_transfert(etablissement, annee)
+        detail = f"{resultat['annulees']} inscription(s) de l'année suivante annulée(s)."
+        if resultat["conservees"]:
+            detail += f" {len(resultat['conservees'])} conservée(s) car elles ont déjà des notes."
+        return Response({**resultat, "detail": detail})

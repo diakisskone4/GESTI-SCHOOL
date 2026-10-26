@@ -105,6 +105,11 @@ def calculer_moyenne_generale_et_rangs(classe, periode):
                 inscription=inscription, periode=periode,
                 defaults={"niveau": "honneur", "moyenne": moyenne_generale, "rang_classe": rang},
             )
+    # Fin d'année : dès que la dernière période (3e trimestre) est calculée, décisions de passage automatiques
+    from apps.academics.passages import calculer_decisions_classe, est_derniere_periode
+
+    if bulletins and est_derniere_periode(periode):
+        calculer_decisions_classe(classe, periode.annee_scolaire)
     return bulletins
 
 
@@ -123,7 +128,10 @@ def _mention(moyenne):
 
 def generer_pdf_bulletin(bulletin, format_page="a4"):
     """Génère le PDF du bulletin (A4 par défaut, ou A5 en version compacte).
-    Seule la version A4 est archivée sur l'objet Bulletin ; l'A5 est générée à la volée."""
+    Seule la version A4 est archivée sur l'objet Bulletin ; l'A5 est générée à la volée.
+    Sur le bulletin de la dernière période figure la décision de fin d'année (passage en vert, redoublement en rouge)."""
+    from apps.academics.passages import decision_pour_bulletin
+
     inscription = bulletin.inscription
     eleve = inscription.eleve
     moyennes = MoyenneMatiere.objects.filter(inscription=inscription, periode=bulletin.periode).select_related("matiere")
@@ -150,6 +158,7 @@ def generer_pdf_bulletin(bulletin, format_page="a4"):
         etablissement=eleve.etablissement,
         appreciation=bulletin.appreciation_conseil,
         moyenne_classe=float(moyenne_classe) if moyenne_classe is not None else None,
+        decision=decision_pour_bulletin(bulletin),
     )
 
     if format_page == "a5":

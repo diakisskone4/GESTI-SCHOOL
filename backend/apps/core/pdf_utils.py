@@ -348,8 +348,31 @@ def _dessiner_bloc_pays_bulletin(c, pays, right_x, top_y):
         c.drawRightString(right_x, drap_y - 4 * mm, pays.upper())
 
 
+_VERT_DECISION = colors.HexColor("#15803d")
+_ROUGE_DECISION = colors.HexColor("#b91c1c")
+
+
+def _bandeau_decision(c, x, y, largeur, hauteur, decision, taille):
+    """Décision de fin d'année : bandeau vert (passage) ou rouge (redoublement), avec la moyenne annuelle.
+    `y` est le haut du bandeau ; renvoie la hauteur utilisée."""
+    c.setFillColor(_VERT_DECISION if decision["admis"] else _ROUGE_DECISION)
+    c.roundRect(x, y - hauteur, largeur, hauteur, hauteur * 0.25, fill=1, stroke=0)
+    c.setFillColor(colors.white)
+    milieu = y - hauteur / 2
+    c.setFont("Helvetica", taille * 0.72)
+    c.drawString(x + hauteur * 0.35, milieu + taille * 0.35, "DÉCISION DE FIN D'ANNÉE")
+    c.setFont("Helvetica-Bold", taille)
+    c.drawString(x + hauteur * 0.35, milieu - taille * 0.75, decision["texte"])
+    moyenne = f"{decision['moyenne_annuelle']:.2f}".replace(".", ",")
+    c.setFont("Helvetica", taille * 0.72)
+    c.drawRightString(x + largeur - hauteur * 0.35, milieu + taille * 0.35, "Moyenne annuelle")
+    c.setFont("Helvetica-Bold", taille)
+    c.drawRightString(x + largeur - hauteur * 0.35, milieu - taille * 0.75, f"{moyenne} / 20")
+    return hauteur
+
+
 def generer_bulletin_pdf(eleve, inscription, periode, lignes_notes, moyenne_generale, rang, effectif_classe,
-                          etablissement, appreciation="", moyenne_classe=None):
+                          etablissement, appreciation="", moyenne_classe=None, decision=None):
     """Génère un bulletin de notes au format A4 : en-tête établissement (logo, drapeau,
     contacts), identité de l'élève, tableau des moyennes par matière avec appréciations
     colorées, synthèse générale et zone de signatures.
@@ -622,6 +645,9 @@ def generer_bulletin_pdf(eleve, inscription, periode, lignes_notes, moyenne_gene
         c.drawCentredString(largeur / 2, y, f"Moyenne de la classe : {float(moyenne_classe):.2f} / 20")
         y -= 9 * mm
 
+    if decision:
+        y -= _bandeau_decision(c, marge, y + 3 * mm, table_largeur, 13 * mm, decision, 11) + 4 * mm
+
     # --- Pied de page : signatures, observations ---
     col_w = table_largeur / 3
 
@@ -671,7 +697,7 @@ def generer_bulletin_pdf(eleve, inscription, periode, lignes_notes, moyenne_gene
 
 
 def generer_bulletin_pdf_a5(eleve, inscription, periode, lignes_notes, moyenne_generale, rang, effectif_classe,
-                             etablissement, appreciation="", moyenne_classe=None):
+                             etablissement, appreciation="", moyenne_classe=None, decision=None):
     """Génère un bulletin de notes au format A5 (148 x 210mm) : version compacte du bulletin A4,
     pratique pour l'impression en volume ou la distribution en classe."""
     buffer = io.BytesIO()
@@ -898,6 +924,9 @@ def generer_bulletin_pdf_a5(eleve, inscription, periode, lignes_notes, moyenne_g
         c.setFont("Helvetica", 5.6)
         c.drawCentredString(largeur / 2, y, f"Moyenne de la classe : {float(moyenne_classe):.2f} / 20")
         y -= 6 * mm
+
+    if decision:
+        y -= _bandeau_decision(c, marge, y + 2 * mm, table_largeur, 9 * mm, decision, 7) + 3 * mm
 
     # --- Pied de page ---
     col_w = table_largeur / 3

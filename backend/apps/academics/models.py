@@ -157,3 +157,41 @@ class Examen(TimeStampedModel):
 
     def __str__(self):
         return f"{self.nom} - {self.classe} ({self.date_examen})"
+
+
+class DecisionPassage(TimeStampedModel):
+    """Décision de fin d'année d'un élève : passage en classe supérieure, redoublement ou fin de cycle.
+
+    Calculée automatiquement à partir de la moyenne annuelle (moyenne des périodes) dès que les bulletins de la
+    dernière période sont calculés ; la direction peut la modifier (décision du conseil de classe), elle n'est alors
+    plus recalculée. Voir apps/academics/passages.py.
+    """
+    DECISION_CHOICES = [
+        ("admis", "Admis(e) en classe supérieure"),
+        ("redouble", "Redouble"),
+        ("fin_cycle", "Fin de cycle"),
+    ]
+
+    inscription = models.OneToOneField("students.Inscription", on_delete=models.CASCADE, related_name="decision_passage")
+    moyenne_annuelle = models.DecimalField(max_digits=5, decimal_places=2)
+    rang_annuel = models.PositiveIntegerField(null=True, blank=True)
+    nb_periodes = models.PositiveSmallIntegerField(default=0, help_text="Nombre de périodes prises en compte")
+    decision = models.CharField(max_length=10, choices=DECISION_CHOICES)
+    niveau_suivant = models.CharField(max_length=100, blank=True, help_text="Niveau visé l'année suivante (affiché sur le bulletin)")
+    manuelle = models.BooleanField(default=False, help_text="Décision fixée par la direction (non recalculée)")
+    motif = models.CharField(max_length=255, blank=True)
+    inscription_suivante = models.OneToOneField(
+        "students.Inscription", on_delete=models.SET_NULL, null=True, blank=True, related_name="decision_origine",
+        help_text="Inscription créée dans l'année suivante lors du transfert",
+    )
+
+    class Meta:
+        verbose_name = "Décision de passage"
+        verbose_name_plural = "Décisions de passage"
+
+    def __str__(self):
+        return f"{self.inscription.eleve} — {self.get_decision_display()} ({self.moyenne_annuelle})"
+
+    @property
+    def est_admis(self):
+        return self.decision in ("admis", "fin_cycle")

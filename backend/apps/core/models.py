@@ -40,6 +40,10 @@ class Etablissement(TimeStampedModel):
     directeur_signature = models.ImageField(upload_to="etablissements/signatures/", blank=True, null=True)
     cachet = models.ImageField(upload_to="etablissements/cachets/", blank=True, null=True)
     actif = models.BooleanField(default=True)
+    moyenne_passage = models.DecimalField(
+        max_digits=4, decimal_places=2, default=10,
+        help_text="Moyenne annuelle minimale (sur 20) pour passer en classe supérieure",
+    )
 
     IMAGES = ("logo", "cachet", "directeur_signature")
 

@@ -7,6 +7,7 @@ from apps.academics.views import (
     ExportResultatsView,
     MoyenneMatiereViewSet,
     NoteViewSet,
+    PassagesView,
     PremiersDeClasseView,
     TableauHonneurViewSet,
     TypeEvaluationViewSet,
@@ -21,6 +22,7 @@ router.register(r"bulletins", BulletinViewSet, basename="bulletin")
 router.register(r"tableaux-honneur", TableauHonneurViewSet, basename="tableau-honneur")
 router.register(r"examens", ExamenViewSet, basename="examen")
 router.register(r"tableau-honneur", PremiersDeClasseView, basename="tableau-honneur-premiers")
+router.register(r"passages", PassagesView, basename="passages")
 router.register(r"exports", ExportResultatsView, basename="export-resultats")
 
 urlpatterns = router.urls
