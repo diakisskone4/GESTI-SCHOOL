@@ -13,3 +13,9 @@ class PaginationListeDeReference(PaginationAjustable):
     """Listes de référence (matières...) utilisées entières dans les formulaires et menus déroulants :
     200 éléments par défaut au lieu de 25, pour ne pas en masquer une partie."""
     page_size = 200
+
+
+class PaginationEmploiDuTemps(PaginationAjustable):
+    """Un emploi du temps s'affiche toujours en entier : couper la liste ferait disparaître des cours."""
+    page_size = 5000
+    max_page_size = 5000

@@ -52,8 +52,8 @@ function absoluteMediaUrl(url) {
   return new URL(url, new URL(API_BASE_URL).origin).href;
 }
 
-/** Construit le document HTML imprimable : entête de l'établissement + grille horaires × jours. */
-function buildPrintDocument({ etablissement, anneeLibelle, title, creneaux, showClasse }) {
+/** Grille horaires × jours d'un emploi du temps, pour l'impression. */
+function buildPrintTable(creneaux, showClasse) {
   const hhmm = (t) => t?.substring(0, 5) || "";
   const slots = Array.from(new Set(creneaux.map((cr) => `${hhmm(cr.heure_debut)}|${hhmm(cr.heure_fin)}`))).sort();
   const days = DAYS.filter((d) => d.index < 5 || creneaux.some((cr) => cr.jour === d.index));
@@ -80,10 +80,30 @@ function buildPrintDocument({ etablissement, anneeLibelle, title, creneaux, show
         .join("")
     : `<tr><td colspan="${days.length + 1}" class="vide">Aucun cours planifié</td></tr>`;
 
+  return `<table>
+    <thead><tr><th class="horaire">Horaire</th>${days.map((d) => `<th>${d.label}</th>`).join("")}</tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+/** Construit le document HTML imprimable : une page par section (entête de l'établissement + grille). */
+function buildPrintDocument({ etablissement, title, sections }) {
   const e = etablissement || {};
   const logo = e.logo_url || absoluteMediaUrl(e.logo);
   const infos = [e.adresse, e.ville, e.pays].filter(Boolean).join(", ");
   const contacts = [e.telephone && `Tél : ${e.telephone}`, e.email].filter(Boolean).join(" — ");
+
+  const entete = `<div class="entete">
+    ${logo ? `<img src="${escapeHtml(logo)}" alt="Logo"/>` : ""}
+    <div class="centre">
+      ${e.academie ? `<div class="academie">${escapeHtml(e.academie)}</div>` : ""}
+      ${e.cap ? `<div class="academie">${escapeHtml(e.cap)}</div>` : ""}
+      <div class="nom">${escapeHtml(e.nom || "")}</div>
+      ${e.devise ? `<div class="devise">${escapeHtml(e.devise)}</div>` : ""}
+      ${infos ? `<div class="infos">${escapeHtml(infos)}</div>` : ""}
+      ${contacts ? `<div class="infos">${escapeHtml(contacts)}</div>` : ""}
+    </div>
+  </div>`;
 
   return `<!doctype html>
 <html lang="fr"><head><meta charset="utf-8"/>
@@ -91,6 +111,7 @@ function buildPrintDocument({ etablissement, anneeLibelle, title, creneaux, show
 <style>
   @page { size: A4 landscape; margin: 12mm; }
   * { box-sizing: border-box; }
+  .page + .page { break-before: page; }
   body { font-family: Arial, Helvetica, sans-serif; color: #111; margin: 0; font-size: 12px; }
   .entete { display: flex; align-items: center; gap: 16px; border-bottom: 2px solid #111; padding-bottom: 10px; }
   .entete img { height: 70px; width: auto; }
@@ -111,23 +132,16 @@ function buildPrintDocument({ etablissement, anneeLibelle, title, creneaux, show
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 </style></head>
 <body>
-  <div class="entete">
-    ${logo ? `<img src="${escapeHtml(logo)}" alt="Logo"/>` : ""}
-    <div class="centre">
-      ${e.academie ? `<div class="academie">${escapeHtml(e.academie)}</div>` : ""}
-      ${e.cap ? `<div class="academie">${escapeHtml(e.cap)}</div>` : ""}
-      <div class="nom">${escapeHtml(e.nom || "")}</div>
-      ${e.devise ? `<div class="devise">${escapeHtml(e.devise)}</div>` : ""}
-      ${infos ? `<div class="infos">${escapeHtml(infos)}</div>` : ""}
-      ${contacts ? `<div class="infos">${escapeHtml(contacts)}</div>` : ""}
-    </div>
-  </div>
-  <h1>Emploi du temps — ${escapeHtml(title)}</h1>
-  <div class="sous-titre">Année scolaire ${escapeHtml(anneeLibelle || "en cours")}</div>
-  <table>
-    <thead><tr><th class="horaire">Horaire</th>${days.map((d) => `<th>${d.label}</th>`).join("")}</tr></thead>
-    <tbody>${rows}</tbody>
-  </table>
+  ${sections
+    .map(
+      (section) => `<section class="page">
+  ${entete}
+  <h1>Emploi du temps — ${escapeHtml(section.title)}</h1>
+  <div class="sous-titre">Année scolaire ${escapeHtml(section.anneeLibelle || "en cours")}</div>
+  ${buildPrintTable(section.creneaux, section.showClasse)}
+  </section>`
+    )
+    .join("")}
   <script>
     window.onload = function () {
       window.focus();
@@ -136,6 +150,21 @@ function buildPrintDocument({ etablissement, anneeLibelle, title, creneaux, show
     window.onafterprint = function () { window.close(); };
   </script>
 </body></html>`;
+}
+
+/** Répartit des créneaux par jour, triés par heure de début. */
+function grouperParJour(creneaux) {
+  const map = {};
+  DAYS.forEach((d) => { map[d.index] = []; });
+  creneaux.forEach((cr) => {
+    if (map[cr.jour]) {
+      map[cr.jour].push(cr);
+    }
+  });
+  Object.values(map).forEach((list) => {
+    list.sort((a, b) => a.heure_debut.localeCompare(b.heure_debut));
+  });
+  return map;
 }
 
 const EMPTY_CRENEAU = {
@@ -153,7 +182,7 @@ export default function EmploiDuTempsPage() {
   const { notify } = useToast();
   const etablissementId = user?.etablissement_courant;
 
-  const { data: classesData } = useFetch(() => classesApi.list({ etablissement: etablissementId }), [etablissementId]);
+  const { data: classesData } = useFetch(() => classesApi.list({ etablissement: etablissementId, page_size: 500 }), [etablissementId]);
   const classes = classesData?.results || [];
 
   const { data: matieresData } = useFetch(() => matieresApi.list({ etablissement: etablissementId }), [etablissementId]);
@@ -169,8 +198,8 @@ export default function EmploiDuTempsPage() {
   const { data: anneesData } = useFetch(() => anneesScolairesApi.list({ etablissement: etablissementId }), [etablissementId]);
   const anneeCourante = (anneesData?.results || []).find((a) => a.est_courante);
 
-  // Modes de filtrage : 'classe' | 'enseignant' | 'salle'
-  const [filterMode, setFilterMode] = useState("classe");
+  // Modes de filtrage : 'tous' | 'classe' | 'enseignant' | 'salle'
+  const [filterMode, setFilterMode] = useState("tous");
   const [selectedClasseId, setSelectedClasseId] = useState("");
   const [selectedEnseignantId, setSelectedEnseignantId] = useState("");
   const [selectedSalle, setSelectedSalle] = useState("");
@@ -183,31 +212,49 @@ export default function EmploiDuTempsPage() {
     setSelectedClasseId(classes[0].id);
   }
 
-  // Requête des créneaux
-  const queryParams = useMemo(() => {
-    if (filterMode === "classe") {
-      return selectedClasseId ? { classe: selectedClasseId } : null;
-    } else if (filterMode === "enseignant") {
-      return selectedEnseignantId ? { enseignant: selectedEnseignantId } : null;
-    } else if (filterMode === "salle") {
-      return selectedSalle ? { salle: selectedSalle } : null;
-    }
-    return null;
-  }, [filterMode, selectedClasseId, selectedEnseignantId, selectedSalle]);
-
+  // Tous les créneaux enregistrés de l'établissement ; les filtres s'appliquent ensuite sur cette liste
   const { data: creneauxData, loading, reload } = useFetch(
-    () => (queryParams ? emploisDuTempsApi.list(queryParams) : Promise.resolve({ results: [] })),
-    [JSON.stringify(queryParams)]
+    () => emploisDuTempsApi.list({ classe__etablissement: etablissementId }),
+    [etablissementId]
   );
-  const creneaux = creneauxData?.results || [];
+  const tousCreneaux = useMemo(() => creneauxData?.results || [], [creneauxData]);
+  const premierChargement = loading && !creneauxData;
+
+  const creneaux = useMemo(() => {
+    if (filterMode === "classe") {
+      return tousCreneaux.filter((cr) => String(cr.classe) === String(selectedClasseId));
+    } else if (filterMode === "enseignant") {
+      return tousCreneaux.filter((cr) => String(cr.enseignant) === String(selectedEnseignantId));
+    } else if (filterMode === "salle") {
+      return tousCreneaux.filter((cr) => selectedSalle && cr.salle === selectedSalle);
+    }
+    return tousCreneaux;
+  }, [tousCreneaux, filterMode, selectedClasseId, selectedEnseignantId, selectedSalle]);
+
+  // Un emploi du temps par classe, pour la vue « Tous »
+  const emploisParClasse = useMemo(() => {
+    const groupes = new Map();
+    tousCreneaux.forEach((cr) => {
+      if (!groupes.has(cr.classe)) {
+        const classe = classes.find((c) => String(c.id) === String(cr.classe));
+        groupes.set(cr.classe, { id: cr.classe, nom: cr.classe_nom, annee: classe?.annee_scolaire_libelle, creneaux: [] });
+      }
+      groupes.get(cr.classe).creneaux.push(cr);
+    });
+    return Array.from(groupes.values()).sort(
+      (a, b) => (b.annee || "").localeCompare(a.annee || "") || a.nom.localeCompare(b.nom, "fr", { numeric: true })
+    );
+  }, [tousCreneaux, classes]);
+
+  const afficheClasse = filterMode === "enseignant" || filterMode === "salle";
 
   // Liste de toutes les salles uniques disponibles
   const salles = useMemo(() => {
     const list = new Set();
     classes.forEach((c) => c.salle && list.add(c.salle));
-    creneaux.forEach((cr) => cr.salle && list.add(cr.salle));
+    tousCreneaux.forEach((cr) => cr.salle && list.add(cr.salle));
     return Array.from(list).filter(Boolean);
-  }, [classes, creneaux]);
+  }, [classes, tousCreneaux]);
 
   // Modal d'ajout / modification
   const [modalOpen, setModalOpen] = useState(false);
@@ -215,11 +262,11 @@ export default function EmploiDuTempsPage() {
   const [form, setForm] = useState(EMPTY_CRENEAU);
   const [saving, setSaving] = useState(false);
 
-  const openCreate = (defaultJour = 0, defaultHeure = "08:00") => {
+  const openCreate = (defaultJour = 0, defaultHeure = "08:00", classeId = null) => {
     setEditing(null);
     setForm({
       ...EMPTY_CRENEAU,
-      classe: filterMode === "classe" && selectedClasseId ? selectedClasseId : (classes[0]?.id || ""),
+      classe: classeId || (filterMode === "classe" && selectedClasseId ? selectedClasseId : (classes[0]?.id || "")),
       enseignant: filterMode === "enseignant" && selectedEnseignantId ? selectedEnseignantId : "",
       salle: filterMode === "salle" && selectedSalle ? selectedSalle : "",
       jour: defaultJour,
@@ -289,13 +336,15 @@ export default function EmploiDuTempsPage() {
 
   // Impression : document dédié contenant uniquement l'entête de l'établissement et le tableau
   const handlePrint = () => {
-    const html = buildPrintDocument({
-      etablissement,
-      anneeLibelle: anneeCourante?.libelle,
-      title: currentTitle,
-      creneaux,
-      showClasse: filterMode !== "classe",
-    });
+    const sections = filterMode === "tous" && emploisParClasse.length
+      ? emploisParClasse.map((g) => ({
+          title: `Classe ${g.nom}`,
+          anneeLibelle: g.annee || anneeCourante?.libelle,
+          creneaux: g.creneaux,
+          showClasse: false,
+        }))
+      : [{ title: currentTitle, anneeLibelle: anneeCourante?.libelle, creneaux, showClasse: afficheClasse }];
+    const html = buildPrintDocument({ etablissement, title: currentTitle, sections });
     const win = window.open("", "_blank");
     if (!win) {
       notify("Autorisez les fenêtres pop-up pour imprimer l'emploi du temps.", "error");
@@ -306,24 +355,10 @@ export default function EmploiDuTempsPage() {
     win.document.close();
   };
 
-  // Groupement des créneaux par jour pour la grille
-  const creneauxParJour = useMemo(() => {
-    const map = {};
-    DAYS.forEach((d) => { map[d.index] = []; });
-    creneaux.forEach((cr) => {
-      if (map[cr.jour]) {
-        map[cr.jour].push(cr);
-      }
-    });
-    // Tri par heure de début
-    Object.values(map).forEach((list) => {
-      list.sort((a, b) => a.heure_debut.localeCompare(b.heure_debut));
-    });
-    return map;
-  }, [creneaux]);
-
   const currentTitle = useMemo(() => {
-    if (filterMode === "classe") {
+    if (filterMode === "tous") {
+      return "Toutes les classes";
+    } else if (filterMode === "classe") {
       const c = classes.find((i) => i.id === selectedClasseId);
       return c ? `Classe ${c.nom}` : "Emploi du temps par classe";
     } else if (filterMode === "enseignant") {
@@ -333,6 +368,114 @@ export default function EmploiDuTempsPage() {
       return selectedSalle ? `Salle ${selectedSalle}` : "Emploi du temps par salle";
     }
   }, [filterMode, selectedClasseId, selectedEnseignantId, selectedSalle, classes, enseignants]);
+
+  // Grille hebdomadaire d'un emploi du temps ; classeId pré-remplit la classe des cours ajoutés depuis cette grille
+  const renderGrille = (liste, classeId = null) => {
+    const parJour = grouperParJour(liste);
+    return (
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        {DAYS.map((day) => {
+          const dayCreneaux = parJour[day.index] || [];
+          return (
+            <div key={day.index} className="flex flex-col rounded-2xl border border-slate-200 bg-slate-50/50 p-3 shadow-sm transition-all hover:bg-slate-50">
+              {/* Entête du jour */}
+              <div className="mb-3 flex items-center justify-between border-b border-slate-200/80 pb-2">
+                <div className="font-bold text-slate-800">{day.label}</div>
+                <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-500 shadow-2xs">
+                  {dayCreneaux.length} cours
+                </span>
+              </div>
+
+              {/* Liste des cours du jour */}
+              <div className="flex-1 space-y-2.5">
+                {dayCreneaux.map((cr) => {
+                  const style = getSubjectColor(cr.matiere_nom || cr.matiere);
+                  return (
+                    <div
+                      key={cr.id}
+                      className={`group relative rounded-xl border p-3 shadow-2xs transition-all hover:shadow-md ${style.bg}`}
+                    >
+                      <div className="flex items-start justify-between gap-1">
+                        <span className={`inline-block rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${style.badge}`}>
+                          {cr.matiere_code || "COURS"}
+                        </span>
+                        <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 print:hidden">
+                          <button
+                            onClick={() => openEdit(cr)}
+                            className="rounded p-1 text-slate-500 hover:bg-white/80 hover:text-brand-600"
+                            title="Modifier"
+                          >
+                            <Pencil size={12} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(cr.id)}
+                            className="rounded p-1 text-slate-500 hover:bg-white/80 hover:text-rose-600"
+                            title="Supprimer"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </div>
+
+                      <p className="mt-1 text-sm font-bold leading-tight text-slate-900">
+                        {cr.matiere_nom}
+                      </p>
+
+                      <div className="mt-2 space-y-1 text-xs text-slate-600">
+                        <div className="flex items-center gap-1.5 font-semibold text-slate-700">
+                          <Clock size={12} className="text-slate-400" />
+                          <span>{cr.heure_debut?.substring(0, 5)} - {cr.heure_fin?.substring(0, 5)}</span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <GraduationCap size={12} className="text-slate-400" />
+                          <span className="truncate">{cr.enseignant_nom || "Enseignant non assigné"}</span>
+                        </div>
+
+                        {cr.salle && (
+                          <div className="flex items-center gap-1.5">
+                            <DoorOpen size={12} className="text-slate-400" />
+                            <span>Salle : <strong>{cr.salle}</strong></span>
+                          </div>
+                        )}
+
+                        {afficheClasse && (
+                          <div className="flex items-center gap-1.5 font-medium text-brand-700">
+                            <Users size={12} />
+                            <span>{cr.classe_nom}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {dayCreneaux.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-8 text-center text-xs text-slate-400">
+                    <p>Aucun cours</p>
+                    <button
+                      onClick={() => openCreate(day.index, "08:00", classeId)}
+                      className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-brand-600 hover:underline print:hidden"
+                    >
+                      <Plus size={12} /> Planifier
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Bouton bas de colonne */}
+              <button
+                onClick={() => openCreate(day.index, "08:00", classeId)}
+                className="mt-3 flex w-full items-center justify-center gap-1 rounded-xl border border-dashed border-slate-300 py-1.5 text-xs font-medium text-slate-500 hover:border-brand-500 hover:bg-white hover:text-brand-600 print:hidden"
+              >
+                <Plus size={13} /> Ajouter
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -358,6 +501,14 @@ export default function EmploiDuTempsPage() {
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Filtrer par :</span>
             <div className="inline-flex rounded-xl bg-slate-100 p-1">
+              <button
+                onClick={() => setFilterMode("tous")}
+                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
+                  filterMode === "tous" ? "bg-white text-brand-600 shadow-sm" : "text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                <CalendarClock size={14} /> Tous
+              </button>
               <button
                 onClick={() => setFilterMode("classe")}
                 className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
@@ -465,6 +616,7 @@ export default function EmploiDuTempsPage() {
 
           <div className="ml-auto text-xs text-slate-500">
             <strong>{creneaux.length}</strong> créneau(x) planifié(s)
+            {filterMode === "tous" && <> dans <strong>{emploisParClasse.length}</strong> classe(s)</>}
           </div>
         </div>
       </div>
@@ -472,113 +624,33 @@ export default function EmploiDuTempsPage() {
       {/* --- VUE 1 : GRILLE HEBDOMADAIRE INTERACTIVE --- */}
       {viewType === "grille" && (
         <div className="space-y-3">
-          {loading && (
+          {premierChargement && (
             <div className="flex items-center justify-center p-12">
               <Loader2 className="animate-spin text-brand-600" size={32} />
             </div>
           )}
 
-          {!loading && (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-              {DAYS.map((day) => {
-                const dayCreneaux = creneauxParJour[day.index] || [];
-                return (
-                  <div key={day.index} className="flex flex-col rounded-2xl border border-slate-200 bg-slate-50/50 p-3 shadow-sm transition-all hover:bg-slate-50">
-                    {/* Entête du jour */}
-                    <div className="mb-3 flex items-center justify-between border-b border-slate-200/80 pb-2">
-                      <div className="font-bold text-slate-800">{day.label}</div>
-                      <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-500 shadow-2xs">
-                        {dayCreneaux.length} cours
-                      </span>
-                    </div>
+          {!premierChargement && filterMode !== "tous" && renderGrille(creneaux)}
 
-                    {/* Liste des cours du jour */}
-                    <div className="flex-1 space-y-2.5">
-                      {dayCreneaux.map((cr) => {
-                        const style = getSubjectColor(cr.matiere_nom || cr.matiere);
-                        return (
-                          <div
-                            key={cr.id}
-                            className={`group relative rounded-xl border p-3 shadow-2xs transition-all hover:shadow-md ${style.bg}`}
-                          >
-                            <div className="flex items-start justify-between gap-1">
-                              <span className={`inline-block rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${style.badge}`}>
-                                {cr.matiere_code || "COURS"}
-                              </span>
-                              <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 print:hidden">
-                                <button
-                                  onClick={() => openEdit(cr)}
-                                  className="rounded p-1 text-slate-500 hover:bg-white/80 hover:text-brand-600"
-                                  title="Modifier"
-                                >
-                                  <Pencil size={12} />
-                                </button>
-                                <button
-                                  onClick={() => handleDelete(cr.id)}
-                                  className="rounded p-1 text-slate-500 hover:bg-white/80 hover:text-rose-600"
-                                  title="Supprimer"
-                                >
-                                  <Trash2 size={12} />
-                                </button>
-                              </div>
-                            </div>
+          {!premierChargement && filterMode === "tous" && emploisParClasse.length === 0 && (
+            <div className="card p-10 text-center text-sm text-slate-500">
+              Aucun emploi du temps enregistré pour le moment.
+            </div>
+          )}
 
-                            <p className="mt-1 text-sm font-bold leading-tight text-slate-900">
-                              {cr.matiere_nom}
-                            </p>
-
-                            <div className="mt-2 space-y-1 text-xs text-slate-600">
-                              <div className="flex items-center gap-1.5 font-semibold text-slate-700">
-                                <Clock size={12} className="text-slate-400" />
-                                <span>{cr.heure_debut?.substring(0, 5)} - {cr.heure_fin?.substring(0, 5)}</span>
-                              </div>
-
-                              <div className="flex items-center gap-1.5">
-                                <GraduationCap size={12} className="text-slate-400" />
-                                <span className="truncate">{cr.enseignant_nom || "Enseignant non assigné"}</span>
-                              </div>
-
-                              {cr.salle && (
-                                <div className="flex items-center gap-1.5">
-                                  <DoorOpen size={12} className="text-slate-400" />
-                                  <span>Salle : <strong>{cr.salle}</strong></span>
-                                </div>
-                              )}
-
-                              {filterMode !== "classe" && (
-                                <div className="flex items-center gap-1.5 font-medium text-brand-700">
-                                  <Users size={12} />
-                                  <span>{cr.classe_nom}</span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-
-                      {dayCreneaux.length === 0 && (
-                        <div className="flex flex-col items-center justify-center py-8 text-center text-xs text-slate-400">
-                          <p>Aucun cours</p>
-                          <button
-                            onClick={() => openCreate(day.index, "08:00")}
-                            className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-brand-600 hover:underline print:hidden"
-                          >
-                            <Plus size={12} /> Planifier
-                          </button>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Bouton bas de colonne */}
-                    <button
-                      onClick={() => openCreate(day.index, "08:00")}
-                      className="mt-3 flex w-full items-center justify-center gap-1 rounded-xl border border-dashed border-slate-300 py-1.5 text-xs font-medium text-slate-500 hover:border-brand-500 hover:bg-white hover:text-brand-600 print:hidden"
-                    >
-                      <Plus size={13} /> Ajouter
-                    </button>
+          {!premierChargement && filterMode === "tous" && emploisParClasse.length > 0 && (
+            <div className="space-y-8">
+              {emploisParClasse.map((groupe) => (
+                <section key={groupe.id} className="space-y-3">
+                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                    <h2 className="text-lg font-bold text-slate-900">{groupe.nom}</h2>
+                    <span className="text-xs text-slate-500">
+                      {groupe.annee ? `${groupe.annee} · ` : ""}{groupe.creneaux.length} créneau(x)
+                    </span>
                   </div>
-                );
-              })}
+                  {renderGrille(groupe.creneaux, groupe.id)}
+                </section>
+              ))}
             </div>
           )}
         </div>
@@ -587,8 +659,8 @@ export default function EmploiDuTempsPage() {
       {/* --- VUE 2 : TABLEAU DÉTAILLÉ --- */}
       {viewType === "tableau" && (
         <DataTable
-          loading={loading}
-          rows={creneaux}
+          loading={premierChargement}
+          rows={filterMode === "tous" ? emploisParClasse.flatMap((g) => g.creneaux) : creneaux}
           columns={[
             {
               key: "jour",

@@ -34,7 +34,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import AllowAny
 
 from apps.core.images import contenu_image, type_mime
-from apps.core.pagination import PaginationListeDeReference
+from apps.core.pagination import PaginationEmploiDuTemps, PaginationListeDeReference
 from apps.core.tenancy import EtablissementScopedMixin, etablissements_accessibles, etablissements_famille_ids
 
 
@@ -169,6 +169,7 @@ class CreneauEmploiDuTempsViewSet(EtablissementScopedMixin, viewsets.ModelViewSe
     queryset = CreneauEmploiDuTemps.objects.select_related("classe", "matiere", "enseignant")
     serializer_class = CreneauEmploiDuTempsSerializer
     permission_classes = [IsAdminOrReadOnly]
+    pagination_class = PaginationEmploiDuTemps
     filterset_fields = ["classe", "classe__etablissement", "classe__annee_scolaire", "matiere", "enseignant", "jour", "salle"]
 
 

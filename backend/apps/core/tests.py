@@ -5,7 +5,7 @@ from django.test import TestCase, override_settings
 from rest_framework.test import APIClient
 
 from apps.accounts.models import User
-from apps.core.models import AnneeScolaire, Classe, Etablissement, Matiere, Niveau
+from apps.core.models import AnneeScolaire, Classe, CreneauEmploiDuTemps, Etablissement, Matiere, Niveau
 from apps.students.models import Eleve, Inscription
 
 
@@ -118,3 +118,23 @@ class ListeMatieresTests(TestCase):
         self.assertEqual(r.data["results"][0]["nom"], "Matière 000")  # ordre d'ajout
         self.assertEqual(r.data["results"][-1]["nom"], "Matière 199")
         self.assertEqual(len(client.get("/api/v1/matieres/", {"page_size": 500}).data["results"]), 230)
+
+
+class ListeEmploisDuTempsTests(TestCase):
+    def test_tous_les_creneaux_enregistres_sont_renvoyes(self):
+        etab, classe, _ = creer_etablissement("EDT")
+        autre_etab, autre_classe, _ = creer_etablissement("AUT")
+        matiere = Matiere.objects.create(etablissement=etab, nom="Maths")
+        autre_matiere = Matiere.objects.create(etablissement=autre_etab, nom="Maths")
+        horaire = {"heure_debut": datetime.time(8), "heure_fin": datetime.time(10)}
+        CreneauEmploiDuTemps.objects.bulk_create(
+            [CreneauEmploiDuTemps(classe=classe, matiere=matiere, jour=i % 6, **horaire) for i in range(60)]
+        )
+        CreneauEmploiDuTemps.objects.create(classe=autre_classe, matiere=autre_matiere, jour=0, **horaire)
+        admin = User.objects.create_user(email="e@edt.ml", password="x", role="admin", etablissement_courant=etab)
+        admin.etablissements.add(etab)
+        client = APIClient(HTTP_HOST="localhost")
+        client.force_authenticate(admin)
+        r = client.get("/api/v1/emplois-du-temps/", {"classe__etablissement": etab.id})
+        self.assertEqual(r.data["count"], 60)
+        self.assertEqual(len(r.data["results"]), 60)  # pas de coupure à 25, rien de l'autre établissement
