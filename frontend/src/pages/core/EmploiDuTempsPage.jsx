@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import {
   CalendarClock, Plus, Pencil, Trash2, Printer, Users,
-  GraduationCap, DoorOpen, Clock, AlertTriangle, Loader2, BookOpen
+  GraduationCap, DoorOpen, Clock, AlertTriangle, Loader2, BookOpen, Combine
 } from "lucide-react";
 import PageHeader from "../../components/ui/PageHeader";
 import Modal from "../../components/ui/Modal";
@@ -52,30 +52,75 @@ function absoluteMediaUrl(url) {
   return new URL(url, new URL(API_BASE_URL).origin).href;
 }
 
-/** Grille horaires × jours d'un emploi du temps, pour l'impression. */
-function buildPrintTable(creneaux, showClasse) {
-  const hhmm = (t) => t?.substring(0, 5) || "";
-  const slots = Array.from(new Set(creneaux.map((cr) => `${hhmm(cr.heure_debut)}|${hhmm(cr.heure_fin)}`))).sort();
-  const days = DAYS.filter((d) => d.index < 5 || creneaux.some((cr) => cr.jour === d.index));
+const hhmm = (t) => t?.substring(0, 5) || "";
+const horaireDe = (cr) => `${hhmm(cr.heure_debut)}|${hhmm(cr.heure_fin)}`;
+const JOURS_SEMAINE = [0, 1, 2, 3, 4]; // du lundi au vendredi
 
-  const cell = (dayIndex, slot) =>
-    creneaux
-      .filter((cr) => cr.jour === dayIndex && `${hhmm(cr.heure_debut)}|${hhmm(cr.heure_fin)}` === slot)
-      .map(
-        (cr) => `<div class="cours">
+/**
+ * Créneaux identiques du lundi au vendredi (même horaire, même matière, même enseignant, même salle,
+ * même classe), seuls dans leur horaire chacun de ces jours : RÉCRÉATION, ACCUEIL, LA DESCENTE...
+ * Renvoie { fusions: [{ cle, horaire, modele, ids }], restants } ; `restants` contient tous les autres créneaux.
+ * `parClasse` : l'horaire doit être libre dans la classe seulement (listes), sinon dans toute la liste
+ * (impression : une case fusionnée ne doit masquer aucun autre cours de la grille).
+ */
+function fusionnerSemaine(creneaux, { parClasse = false } = {}) {
+  const occupation = (cr, jour) => `${parClasse ? cr.classe : ""}#${horaireDe(cr)}#${jour}`;
+  const parHoraireJour = new Map();
+  creneaux.forEach((cr) => {
+    const cle = occupation(cr, cr.jour);
+    parHoraireJour.set(cle, (parHoraireJour.get(cle) || 0) + 1);
+  });
+  const groupes = new Map();
+  creneaux.forEach((cr) => {
+    if (!JOURS_SEMAINE.includes(cr.jour)) return;
+    const cle = [horaireDe(cr), cr.classe, cr.matiere, cr.enseignant || "", (cr.salle || "").trim().toLowerCase()].join("#");
+    if (!groupes.has(cle)) groupes.set(cle, []);
+    groupes.get(cle).push(cr);
+  });
+  const fusions = [];
+  const fusionnes = new Set();
+  groupes.forEach((liste, cle) => {
+    const horaire = horaireDe(liste[0]);
+    const complet = JOURS_SEMAINE.every(
+      (j) => liste.filter((cr) => cr.jour === j).length === 1 && parHoraireJour.get(occupation(liste[0], j)) === 1
+    );
+    if (!complet) return;
+    liste.forEach((cr) => fusionnes.add(cr.id));
+    fusions.push({ cle, horaire, modele: liste[0], ids: liste.map((cr) => cr.id) });
+  });
+  fusions.sort((a, b) => a.horaire.localeCompare(b.horaire));
+  return { fusions, restants: creneaux.filter((cr) => !fusionnes.has(cr.id)) };
+}
+
+/** Grille horaires × jours d'un emploi du temps, pour l'impression. */
+function buildPrintTable(creneaux, showClasse, fusionner = false) {
+  const slots = Array.from(new Set(creneaux.map(horaireDe))).sort();
+  const days = DAYS.filter((d) => d.index < 5 || creneaux.some((cr) => cr.jour === d.index));
+  const { fusions, restants } = fusionner ? fusionnerSemaine(creneaux) : { fusions: [], restants: creneaux };
+
+  const contenu = (cr) => `<div class="cours">
           <div class="matiere">${escapeHtml(cr.matiere_nom)}</div>
           ${cr.enseignant_nom ? `<div>${escapeHtml(cr.enseignant_nom)}</div>` : ""}
           ${cr.salle ? `<div>Salle ${escapeHtml(cr.salle)}</div>` : ""}
           ${showClasse && cr.classe_nom ? `<div>${escapeHtml(cr.classe_nom)}</div>` : ""}
-        </div>`
-      )
+        </div>`;
+
+  const cell = (dayIndex, slot) =>
+    restants
+      .filter((cr) => cr.jour === dayIndex && horaireDe(cr) === slot)
+      .map(contenu)
       .join("");
 
   const rows = slots.length
     ? slots
         .map((slot) => {
           const [debut, fin] = slot.split("|");
-          return `<tr><th class="horaire">${debut}<br/>${fin}</th>${days.map((d) => `<td>${cell(d.index, slot)}</td>`).join("")}</tr>`;
+          const fusion = fusions.find((f) => f.horaire === slot);
+          const cellules = fusion
+            ? `<td colspan="${JOURS_SEMAINE.length}" class="fusion">${contenu(fusion.modele)}</td>` +
+              days.filter((d) => !JOURS_SEMAINE.includes(d.index)).map((d) => `<td>${cell(d.index, slot)}</td>`).join("")
+            : days.map((d) => `<td>${cell(d.index, slot)}</td>`).join("");
+          return `<tr><th class="horaire">${debut}<br/>${fin}</th>${cellules}</tr>`;
         })
         .join("")
     : `<tr><td colspan="${days.length + 1}" class="vide">Aucun cours planifié</td></tr>`;
@@ -87,7 +132,7 @@ function buildPrintTable(creneaux, showClasse) {
 }
 
 /** Construit le document HTML imprimable : une page par section (entête de l'établissement + grille). */
-function buildPrintDocument({ etablissement, title, sections }) {
+function buildPrintDocument({ etablissement, title, sections, fusionner }) {
   const e = etablissement || {};
   const logo = e.logo_url || absoluteMediaUrl(e.logo);
   const infos = [e.adresse, e.ville, e.pays].filter(Boolean).join(", ");
@@ -128,6 +173,7 @@ function buildPrintDocument({ etablissement, title, sections }) {
   th.horaire { width: 80px; background: #f5f5f5; text-align: center; vertical-align: middle; }
   .cours + .cours { border-top: 1px dashed #999; margin-top: 4px; padding-top: 4px; }
   .matiere { font-weight: bold; text-transform: uppercase; }
+  td.fusion { text-align: center; vertical-align: middle; background: #f7f7f7; letter-spacing: 0.08em; }
   .vide { text-align: center; padding: 24px; color: #666; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 </style></head>
@@ -138,7 +184,7 @@ function buildPrintDocument({ etablissement, title, sections }) {
   ${entete}
   <h1>Emploi du temps — ${escapeHtml(section.title)}</h1>
   <div class="sous-titre">Année scolaire ${escapeHtml(section.anneeLibelle || "en cours")}</div>
-  ${buildPrintTable(section.creneaux, section.showClasse)}
+  ${buildPrintTable(section.creneaux, section.showClasse, fusionner)}
   </section>`
     )
     .join("")}
@@ -207,6 +253,21 @@ export default function EmploiDuTempsPage() {
   // Vue : 'grille' | 'tableau'
   const [viewType, setViewType] = useState("grille");
 
+  // Fusion des créneaux identiques du lundi au vendredi (préférence mémorisée dans le navigateur)
+  const [fusionner, setFusionner] = useState(() => {
+    try {
+      return localStorage.getItem("gs_edt_fusion") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const basculerFusion = () => {
+    setFusionner((actuel) => {
+      try { localStorage.setItem("gs_edt_fusion", actuel ? "0" : "1"); } catch { /* préférence non mémorisée */ }
+      return !actuel;
+    });
+  };
+
   // Initialisation par défaut de la première classe
   if (!selectedClasseId && classes.length > 0) {
     setSelectedClasseId(classes[0].id);
@@ -247,6 +308,14 @@ export default function EmploiDuTempsPage() {
   }, [tousCreneaux, classes]);
 
   const afficheClasse = filterMode === "enseignant" || filterMode === "salle";
+
+  // Lignes du tableau détaillé ; avec la fusion, un créneau identique du lundi au vendredi tient sur une ligne
+  const lignesTableau = useMemo(() => {
+    const liste = filterMode === "tous" ? emploisParClasse.flatMap((g) => g.creneaux) : creneaux;
+    if (!fusionner) return liste;
+    const { fusions, restants } = fusionnerSemaine(liste, { parClasse: true });
+    return [...fusions.map((f) => ({ ...f.modele, id: f.cle, fusion: f })), ...restants];
+  }, [filterMode, emploisParClasse, creneaux, fusionner]);
 
   // Liste de toutes les salles uniques disponibles
   const salles = useMemo(() => {
@@ -334,6 +403,19 @@ export default function EmploiDuTempsPage() {
     }
   };
 
+  /** Suppression d'un créneau fusionné : le même cours est retiré des cinq jours. */
+  const handleDeleteFusion = async (fusion) => {
+    if (!window.confirm(`Supprimer « ${fusion.modele.matiere_nom} » du lundi au vendredi ?`)) return;
+    try {
+      await Promise.all(fusion.ids.map((id) => emploisDuTempsApi.remove(id)));
+      notify("Créneau supprimé du lundi au vendredi.", "success");
+      reload();
+    } catch (err) {
+      notify(extractErrorMessage(err), "error");
+      reload();
+    }
+  };
+
   // Impression : document dédié contenant uniquement l'entête de l'établissement et le tableau
   const handlePrint = () => {
     const sections = filterMode === "tous" && emploisParClasse.length
@@ -344,7 +426,7 @@ export default function EmploiDuTempsPage() {
           showClasse: false,
         }))
       : [{ title: currentTitle, anneeLibelle: anneeCourante?.libelle, creneaux, showClasse: afficheClasse }];
-    const html = buildPrintDocument({ etablissement, title: currentTitle, sections });
+    const html = buildPrintDocument({ etablissement, title: currentTitle, sections, fusionner });
     const win = window.open("", "_blank");
     if (!win) {
       notify("Autorisez les fenêtres pop-up pour imprimer l'emploi du temps.", "error");
@@ -371,8 +453,42 @@ export default function EmploiDuTempsPage() {
 
   // Grille hebdomadaire d'un emploi du temps ; classeId pré-remplit la classe des cours ajoutés depuis cette grille
   const renderGrille = (liste, classeId = null) => {
-    const parJour = grouperParJour(liste);
+    const { fusions, restants } = fusionner ? fusionnerSemaine(liste, { parClasse: true }) : { fusions: [], restants: liste };
+    const parJour = grouperParJour(restants);
     return (
+      <div className="space-y-3">
+      {fusions.length > 0 && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+            <Combine size={14} /> Du lundi au vendredi
+          </div>
+          <div className="space-y-1.5">
+            {fusions.map((f) => (
+              <div key={f.cle} className="group flex items-center gap-3 rounded-xl bg-slate-50 px-3 py-2">
+                <span className="flex w-28 flex-shrink-0 items-center gap-1.5 text-xs font-semibold text-slate-600">
+                  <Clock size={12} className="text-slate-400" />
+                  {f.horaire.replace("|", " - ")}
+                </span>
+                <span className="flex-1 text-center text-sm font-bold uppercase tracking-widest text-slate-800">
+                  {f.modele.matiere_nom}
+                </span>
+                <span className="hidden text-xs text-slate-500 sm:inline">
+                  {[f.modele.enseignant_nom, f.modele.salle && `Salle ${f.modele.salle}`, afficheClasse && f.modele.classe_nom]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </span>
+                <button
+                  onClick={() => handleDeleteFusion(f)}
+                  className="rounded p-1 text-slate-400 opacity-0 transition-opacity hover:bg-white hover:text-rose-600 group-hover:opacity-100"
+                  title="Supprimer du lundi au vendredi"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {DAYS.map((day) => {
           const dayCreneaux = parJour[day.index] || [];
@@ -474,6 +590,7 @@ export default function EmploiDuTempsPage() {
           );
         })}
       </div>
+      </div>
     );
   };
 
@@ -484,6 +601,14 @@ export default function EmploiDuTempsPage() {
         subtitle="Organisation des cours, planning hebdomadaire, suivi des matières, salles et enseignants."
         actions={
           <div className="flex flex-wrap items-center gap-2 print:hidden">
+            <button
+              onClick={basculerFusion}
+              aria-pressed={fusionner}
+              className={fusionner ? "btn-secondary border-brand-300 bg-brand-50 text-brand-700" : "btn-secondary"}
+              title="Regrouper en une seule case les créneaux identiques du lundi au vendredi (récréation, accueil, descente...)"
+            >
+              <Combine size={16} /> {fusionner ? "Fusionné" : "Fusionner"}
+            </button>
             <button onClick={handlePrint} className="btn-secondary">
               <Printer size={16} /> Imprimer / PDF
             </button>
@@ -660,12 +785,19 @@ export default function EmploiDuTempsPage() {
       {viewType === "tableau" && (
         <DataTable
           loading={premierChargement}
-          rows={filterMode === "tous" ? emploisParClasse.flatMap((g) => g.creneaux) : creneaux}
+          rows={lignesTableau}
           columns={[
             {
               key: "jour",
               header: "Jour",
-              render: (r) => <span className="font-semibold text-slate-800">{r.jour_label}</span>,
+              render: (r) =>
+                r.fusion ? (
+                  <span className="inline-flex items-center gap-1.5 font-semibold text-brand-700">
+                    <Combine size={13} /> Lundi → Vendredi
+                  </span>
+                ) : (
+                  <span className="font-semibold text-slate-800">{r.jour_label}</span>
+                ),
             },
             {
               key: "horaire",
@@ -702,14 +834,17 @@ export default function EmploiDuTempsPage() {
               header: "",
               render: (r) => (
                 <div className="flex justify-end gap-1">
+                  {!r.fusion && (
+                    <button
+                      onClick={() => openEdit(r)}
+                      className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-brand-600"
+                    >
+                      <Pencil size={15} />
+                    </button>
+                  )}
                   <button
-                    onClick={() => openEdit(r)}
-                    className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-brand-600"
-                  >
-                    <Pencil size={15} />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(r.id)}
+                    onClick={() => (r.fusion ? handleDeleteFusion(r.fusion) : handleDelete(r.id))}
+                    title={r.fusion ? "Supprimer du lundi au vendredi" : "Supprimer"}
                     className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
                   >
                     <Trash2 size={15} />

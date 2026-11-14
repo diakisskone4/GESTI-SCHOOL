@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, IdCard, Pencil, Trash2, Loader2, Eye, Filter, Camera, User, Users, School, FileSpreadsheet } from "lucide-react";
+import { Plus, IdCard, Pencil, Trash2, Loader2, Eye, Filter, Camera, User, Users, School, FileSpreadsheet, Upload } from "lucide-react";
+import ImportElevesModal from "./ImportElevesModal";
 import PageHeader from "../../components/ui/PageHeader";
 import DataTable from "../../components/ui/DataTable";
 import Modal from "../../components/ui/Modal";
@@ -49,6 +50,7 @@ export default function ElevesPage() {
     }
   });
   const [exportEnCours, setExportEnCours] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   // Recherche lancée 300 ms après la dernière frappe, en revenant à la première page
   useEffect(() => {
@@ -85,7 +87,7 @@ export default function ElevesPage() {
   useEffect(() => {
     if (data && data.results?.length === 0 && page > 1) setPage(page - 1);
   }, [data, page]);
-  const { data: classesData } = useFetch(() => classesApi.list({ etablissement: etablissementId }), [etablissementId]);
+  const { data: classesData } = useFetch(() => classesApi.list({ etablissement: etablissementId, page_size: 500 }), [etablissementId]);
   const classes = classesData?.results || [];
 
   const { data: anneesData } = useFetch(() => anneesScolairesApi.list({ etablissement: etablissementId }), [etablissementId]);
@@ -315,6 +317,9 @@ export default function ElevesPage() {
             >
               <IdCard size={16} /> Cartes scolaires
             </button>
+            <button onClick={() => setImportOpen(true)} className="btn-secondary" title="Importer une liste d'élèves (Excel, CSV ou PDF)">
+              <Upload size={16} /> Importer une liste
+            </button>
             <button onClick={openCreate} className="btn-primary">
               <Plus size={16} /> Inscrire un élève
             </button>
@@ -482,6 +487,9 @@ export default function ElevesPage() {
           chargement={loading}
         />
       </div>
+
+      {/* --- IMPORT D'UNE LISTE (Excel, CSV, PDF) --- */}
+      <ImportElevesModal open={importOpen} onClose={() => setImportOpen(false)} classes={classes} onImported={reload} />
 
       {/* --- MODAL AFFECTATION À UNE CLASSE --- */}
       <Modal

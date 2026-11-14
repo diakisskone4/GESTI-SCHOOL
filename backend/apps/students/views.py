@@ -5,12 +5,14 @@ from django.shortcuts import get_object_or_404
 from rest_framework import mixins, viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied, ValidationError
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.core.pdf_utils import generer_carte_scolaire_pdf
 from apps.core.pagination import PaginationAjustable
 from apps.core.permissions import IsAdmin, IsAdminOrReadOnly, IsAdminOuSurveillant
+from apps.students import importation
 from apps.students.archives import archiver_apres_operation, creer_archive, creer_archive_etablissement, donnees_eleve
 from apps.students.exports import classeur_eleves, nom_fichier_excel
 from apps.students.models import Absence, ArchiveEleves, CarteScolaire, Eleve, Inscription, SanctionRecompense
@@ -89,6 +91,41 @@ class EleveViewSet(EtablissementScopedMixin, viewsets.ModelViewSet):
         reponse = HttpResponse(classeur_eleves(etablissement, classe), content_type=XLSX)
         reponse["Content-Disposition"] = f'attachment; filename="{nom_fichier_excel(etablissement, classe)}"'
         return reponse
+
+    @action(detail=False, methods=["post"], permission_classes=[IsAdmin], url_path="importer/analyser",
+            parser_classes=[MultiPartParser, FormParser])
+    def importer_analyser(self, request):
+        """Lit une liste d'élèves (Excel, CSV ou PDF) et renvoie un aperçu, sans rien enregistrer.
+        ?classe=<id> (facultatif) : classe des élèves dont le fichier n'indique pas la classe."""
+        etablissement = _etablissement_cible(request)
+        fichier = request.FILES.get("fichier")
+        if not fichier:
+            raise ValidationError({"fichier": "Choisissez un fichier Excel, CSV ou PDF."})
+        classe_id = request.data.get("classe")
+        classe = classe_du_perimetre(request.user, classe_id) if classe_id else None
+        if fichier.size > importation.TAILLE_MAX:
+            raise ValidationError({"fichier": "Le fichier dépasse 10 Mo."})
+        try:
+            return Response(importation.analyser_fichier(fichier.name, fichier.read(), etablissement, classe))
+        except importation.FichierIllisible as exc:
+            raise ValidationError({"fichier": str(exc)}) from exc
+
+    @action(detail=False, methods=["post"], permission_classes=[IsAdmin])
+    def importer(self, request):
+        """Inscrit les élèves de l'aperçu (éventuellement corrigé) : {"lignes": [...]}."""
+        etablissement = _etablissement_cible(request)
+        lignes = request.data.get("lignes")
+        if not isinstance(lignes, list) or not lignes:
+            raise ValidationError({"lignes": "Aucun élève à importer."})
+        if len(lignes) > importation.LIGNES_MAX:
+            raise ValidationError({"lignes": f"{importation.LIGNES_MAX} élèves au maximum par import."})
+        lignes = [l for l in lignes if isinstance(l, dict)]
+        resultat = importation.importer_lignes(lignes, etablissement)
+        if resultat["inscrits"]:
+            detail = ", ".join(f"{nom} : {n}" for nom, n in sorted(resultat["par_classe"].items()))
+            archiver_apres_operation(etablissement.pk, request.user, "import",
+                                     f"Import d'une liste : {resultat['inscrits']} élève(s) inscrit(s) ({detail})")
+        return Response(resultat)
 
     @action(detail=True, methods=["get"], permission_classes=[IsAuthenticated])
     def historique(self, request, pk=None):

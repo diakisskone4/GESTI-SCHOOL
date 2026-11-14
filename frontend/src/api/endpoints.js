@@ -42,6 +42,13 @@ export const elevesApi = {
   ...resource("/eleves"),
   historique: (id) => api.get(`/eleves/${id}/historique/`).then((r) => r.data),
   exportExcelPath: (classe) => `/eleves/export_excel/${classe ? `?classe=${classe}` : ""}`,
+  importerAnalyser: (fichier, classe) => {
+    const fd = new FormData();
+    fd.append("fichier", fichier);
+    if (classe) fd.append("classe", classe);
+    return api.post("/eleves/importer/analyser/", fd).then((r) => r.data);
+  },
+  importer: (lignes) => api.post("/eleves/importer/", { lignes }).then((r) => r.data),
 };
 export const archivesElevesApi = {
   list: (params) => api.get("/archives-eleves/", { params }).then((r) => r.data),
