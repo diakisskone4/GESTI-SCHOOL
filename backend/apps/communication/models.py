@@ -3,6 +3,7 @@ from django.conf import settings
 from django.db import models
 
 from apps.core.models import TimeStampedModel
+from apps.core.validators import valider_fichier_televerse
 
 
 class Message(TimeStampedModel):
@@ -12,7 +13,7 @@ class Message(TimeStampedModel):
     destinataire = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="messages_recus")
     objet = models.CharField(max_length=200, blank=True)
     contenu = models.TextField()
-    piece_jointe = models.FileField(upload_to="communication/pieces_jointes/", blank=True, null=True)
+    piece_jointe = models.FileField(upload_to="communication/pieces_jointes/", validators=[valider_fichier_televerse], blank=True, null=True)
     lu = models.BooleanField(default=False)
     lu_le = models.DateTimeField(null=True, blank=True)
 
@@ -38,7 +39,7 @@ class Annonce(TimeStampedModel):
     contenu = models.TextField()
     public_cible = models.CharField(max_length=15, choices=PUBLIC_CHOICES, default="tous")
     classe = models.ForeignKey("core.Classe", on_delete=models.CASCADE, null=True, blank=True, related_name="annonces")
-    piece_jointe = models.FileField(upload_to="communication/annonces/", blank=True, null=True)
+    piece_jointe = models.FileField(upload_to="communication/annonces/", validators=[valider_fichier_televerse], blank=True, null=True)
     date_publication = models.DateTimeField(auto_now_add=True)
     date_expiration = models.DateTimeField(null=True, blank=True)
     epinglee = models.BooleanField(default=False)

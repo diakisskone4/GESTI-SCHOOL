@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.auth import get_user_model, password_validation
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Q
@@ -11,6 +12,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from apps.accounts.models import LienParentEleve
+from apps.accounts.protection import connexion_bloquee
 from apps.accounts.serializers import (
     ChangePasswordSerializer,
     CustomTokenObtainPairSerializer,
@@ -31,6 +33,12 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     throttle_scope = "auth"
 
     def post(self, request, *args, **kwargs):
+        if connexion_bloquee(str(request.data.get("email") or "")):
+            minutes = getattr(settings, "CONNEXION_BLOCAGE_MINUTES", 15)
+            return Response(
+                {"detail": f"Trop de tentatives de connexion échouées pour ce compte. Réessayez dans {minutes} minutes."},
+                status=status.HTTP_429_TOO_MANY_REQUESTS,
+            )
         response = super().post(request, *args, **kwargs)
         if response.status_code == 200:
             email = request.data.get("email")

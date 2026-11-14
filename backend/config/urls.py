@@ -1,11 +1,14 @@
 """Configuration des URLs du projet Gesti-Scolaire ERP."""
 from django.conf import settings
-from django.conf.urls.static import static
 from django.contrib import admin
-from django.urls import include, path
+from django.contrib.admin.views.decorators import staff_member_required
+from django.http import JsonResponse
+from django.urls import include, path, re_path
 from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
+
+from apps.core.media_securise import servir_media
 
 schema_view = get_schema_view(
     openapi.Info(
@@ -17,8 +20,21 @@ schema_view = get_schema_view(
     permission_classes=[permissions.AllowAny],
 )
 
+
+def documentation(vue):
+    """La documentation de l'API décrit toutes les routes : réservée aux administrateurs en production."""
+    return vue if settings.DEBUG else staff_member_required(vue)
+
+
+def sante(request):
+    """Contrôle de bon fonctionnement utilisé par l'hébergeur (Render), sans aucune donnée."""
+    return JsonResponse({"statut": "ok"})
+
+
 urlpatterns = [
-    path("admin/", admin.site.urls),
+    # Adresse de l'administration Django modifiable (variable ADMIN_URL) pour ne pas exposer « /admin/ »
+    path(settings.ADMIN_URL, admin.site.urls),
+    path("api/v1/sante/", sante, name="sante"),
 
     # Auth & utilisateurs
     path("api/v1/", include("apps.accounts.urls")),
@@ -44,17 +60,10 @@ urlpatterns = [
     path("api/v1/", include("apps.plateforme.urls")),
 
     # Documentation API
-    path("api/docs/", schema_view.with_ui("swagger", cache_timeout=0), name="schema-swagger-ui"),
-    path("api/redoc/", schema_view.with_ui("redoc", cache_timeout=0), name="schema-redoc"),
+    path("api/docs/", documentation(schema_view.with_ui("swagger", cache_timeout=0)), name="schema-swagger-ui"),
+    path("api/redoc/", documentation(schema_view.with_ui("redoc", cache_timeout=0)), name="schema-redoc"),
+
+    # Fichiers envoyés et générés : uniquement par des liens signés et temporaires délivrés par l'API
+    # (apps/core/media_securise.py) ; sans signature valide, réponse 404.
+    re_path(r"^media/(?P<path>.+)$", servir_media),
 ]
-
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-elif getattr(settings, "SERVE_MEDIA", False):
-    # Production sans serveur de fichiers dédié (ex: Render) : Django sert lui-même /media/.
-    from django.urls import re_path
-    from django.views.static import serve
-
-    urlpatterns += [
-        re_path(r"^media/(?P<path>.*)$", serve, {"document_root": settings.MEDIA_ROOT}),
-    ]

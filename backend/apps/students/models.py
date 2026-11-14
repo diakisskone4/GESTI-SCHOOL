@@ -5,6 +5,7 @@ from django.db import models
 from django.db.models.functions import Lower
 
 from apps.core.models import TimeStampedModel
+from apps.core.validators import valider_fichier_televerse
 
 
 class Eleve(TimeStampedModel):
@@ -106,7 +107,7 @@ class Absence(TimeStampedModel):
     duree_minutes_retard = models.PositiveIntegerField(null=True, blank=True)
     justifiee = models.BooleanField(default=False)
     motif = models.CharField(max_length=255, blank=True)
-    piece_justificative = models.FileField(upload_to="eleves/justificatifs/", blank=True, null=True)
+    piece_justificative = models.FileField(upload_to="eleves/justificatifs/", validators=[valider_fichier_televerse], blank=True, null=True)
     signale_par = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+")
 
     class Meta:

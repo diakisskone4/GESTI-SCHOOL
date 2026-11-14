@@ -3,6 +3,7 @@ from django.conf import settings
 from django.db import models
 
 from apps.core.models import TimeStampedModel
+from apps.core.validators import valider_fichier_televerse
 
 
 class Employe(TimeStampedModel):
@@ -122,7 +123,7 @@ class DocumentPedagogique(TimeStampedModel):
     classe = models.ForeignKey("core.Classe", on_delete=models.SET_NULL, null=True, blank=True, related_name="documents_pedagogiques")
     matiere = models.ForeignKey("core.Matiere", on_delete=models.SET_NULL, null=True, blank=True, related_name="documents_pedagogiques")
     titre = models.CharField(max_length=200)
-    fichier = models.FileField(upload_to="pedagogie/documents/")
+    fichier = models.FileField(upload_to="pedagogie/documents/", validators=[valider_fichier_televerse])
     description = models.TextField(blank=True)
 
     class Meta:

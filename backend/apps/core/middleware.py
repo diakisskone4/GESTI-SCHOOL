@@ -47,3 +47,29 @@ class ActivityLogMiddleware:
         if x_forwarded_for:
             return x_forwarded_for.split(",")[0].strip()
         return request.META.get("REMOTE_ADDR")
+
+
+class EntetesSecuriteMiddleware:
+    """En-têtes de sécurité complémentaires de ceux de Django (SecurityMiddleware).
+
+    Les réponses de l'API (JSON) ne doivent jamais être interprétées comme une page : aucune ressource,
+    aucun script, aucun affichage dans un cadre. L'administration et la documentation, qui sont de vraies
+    pages, gardent leur fonctionnement normal.
+    """
+
+    POLITIQUE_API = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+    PERMISSIONS = "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        response.headers.setdefault("Permissions-Policy", self.PERMISSIONS)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        if request.path.startswith("/api/v1/"):
+            response.headers.setdefault("Content-Security-Policy", self.POLITIQUE_API)
+            if request.method != "GET" or "Authorization" in request.headers:
+                # Données personnelles : jamais conservées par un cache intermédiaire
+                response.headers.setdefault("Cache-Control", "no-store")
+        return response

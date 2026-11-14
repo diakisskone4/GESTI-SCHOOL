@@ -5,6 +5,8 @@ set -o errexit
 pip install -r requirements.txt
 python manage.py collectstatic --no-input
 python manage.py migrate --no-input
+# Table du cache partagé (blocage des connexions après trop d'échecs, limitation de débit)
+python manage.py createcachetable
 
 # Crée ou met à jour le compte d'administration (/admin) avec le mot de passe défini sur Render.
 # En cas d'échec, le déploiement s'arrête (au lieu de continuer avec un compte inutilisable).

@@ -22,7 +22,7 @@ MIDDLEWARE.insert(  # noqa: F405
     "whitenoise.middleware.WhiteNoiseMiddleware",
 )
 STORAGES = {
-    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "default": {"BACKEND": "apps.core.media_securise.StockageSigne"},
     "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
 }
 
@@ -41,3 +41,15 @@ SECURE_HSTS_PRELOAD = True
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
+
+# --- Clé secrète et cache partagé -------------------------------------------------
+# Clé secrète obligatoire : avec la clé par défaut, n'importe qui pourrait fabriquer des jetons
+# de connexion ou des liens de fichiers valides.
+if SECRET_KEY.startswith("django-insecure") or SECRET_KEY in ("change-me-in-production", "") or len(SECRET_KEY) < 32:  # noqa: F405
+    from django.core.exceptions import ImproperlyConfigured
+
+    raise ImproperlyConfigured("SECRET_KEY absente ou trop faible : définissez une clé longue et aléatoire.")
+
+# Cache partagé entre les processus gunicorn (blocages de connexion, limitation de débit) :
+# table créée par « manage.py createcachetable » dans build.sh.
+CACHES = {"default": {"BACKEND": "django.core.cache.backends.db.DatabaseCache", "LOCATION": "gs_cache"}}

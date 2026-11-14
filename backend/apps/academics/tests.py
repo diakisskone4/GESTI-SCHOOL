@@ -84,7 +84,9 @@ class TableauHonneurTests(TestCase):
         premier.save()
         self.calculer()
         data = self.client.get("/api/v1/tableau-honneur/laureats/", {"periode": self.periode.pk}).data
-        self.assertTrue(data["classes"][0]["laureats"][0]["photo"].endswith(".jpg"))
+        adresse, _, signature = data["classes"][0]["laureats"][0]["photo"].partition("?s=")
+        self.assertTrue(adresse.endswith(".jpg"))
+        self.assertTrue(signature)  # lien /media/ signé (apps/core/media_securise.py)
         self.assertEqual(self.client.get("/api/v1/tableau-honneur/affiche/", {"periode": self.periode.pk}).status_code, 200)
         premier.photo.delete(save=False)
 

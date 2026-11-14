@@ -5,6 +5,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from apps.accounts.doublons import verifier_eleve_unique, verifier_email_utilisateur, verifier_telephone_utilisateur
 from apps.accounts.models import LienParentEleve, User
+from apps.accounts.protection import enregistrer_echec_matricule, matricule_bloque
 from apps.core.models import Classe
 from apps.students.models import Eleve, Inscription
 
@@ -91,11 +92,16 @@ class RegisterSerializer(serializers.ModelSerializer):
             matricule = (attrs.get("matricule") or "").strip()
             if matricule:
                 # Rattachement à une fiche élève déjà créée par l'administration :
-                # le matricule ET la date de naissance doivent correspondre.
+                # le matricule ET la date de naissance doivent correspondre (essais limités par matricule).
+                if matricule_bloque(matricule):
+                    raise serializers.ValidationError({"matricule": (
+                        "Trop d'essais pour ce matricule. Réessayez dans une heure ou adressez-vous à l'administration."
+                    )})
                 eleve = Eleve.objects.filter(
                     matricule__iexact=matricule, date_naissance=attrs.get("date_naissance"), user__isnull=True,
                 ).first()
                 if not eleve:
+                    enregistrer_echec_matricule(matricule)
                     erreurs["matricule"] = "Aucune fiche élève libre ne correspond à ce matricule et à cette date de naissance."
                 elif classe and eleve.etablissement_id != classe.etablissement_id:
                     erreurs["matricule"] = "Ce matricule appartient à un autre établissement."

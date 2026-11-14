@@ -188,13 +188,6 @@ function buildPrintDocument({ etablissement, title, sections, fusionner }) {
   </section>`
     )
     .join("")}
-  <script>
-    window.onload = function () {
-      window.focus();
-      window.print();
-    };
-    window.onafterprint = function () { window.close(); };
-  </script>
 </body></html>`;
 }
 
@@ -435,6 +428,15 @@ export default function EmploiDuTempsPage() {
     win.document.open();
     win.document.write(html);
     win.document.close();
+    // Impression lancée d'ici (et non par un script dans le document) : la politique de sécurité
+    // du site interdit les scripts en ligne, y compris dans cette fenêtre.
+    const imprimer = () => {
+      win.focus();
+      win.print();
+    };
+    win.onafterprint = () => win.close();
+    if (win.document.readyState === "complete") setTimeout(imprimer, 300);
+    else win.addEventListener("load", imprimer, { once: true });
   };
 
   const currentTitle = useMemo(() => {

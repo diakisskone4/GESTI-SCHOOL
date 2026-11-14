@@ -15,7 +15,8 @@ services:
     plan: free
     buildCommand: ./build.sh
     startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 120
-    healthCheckPath: /api/docs/
+    # Route de santé sans données (la documentation de l'API est réservée aux administrateurs)
+    healthCheckPath: /api/v1/sante/
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.0
@@ -23,6 +24,9 @@ services:
         value: config.settings.prod
       - key: SECRET_KEY
         generateValue: true
+      # Adresse secrète de l'administration Django, ex. « gestion-7f3k9q » (au lieu de /admin/)
+      - key: ADMIN_URL
+        sync: false
       - key: ALLOWED_HOSTS
         value: .onrender.com
       # URL du site frontend ET du site vitrine, séparées par des virgules, ex:
@@ -76,6 +80,30 @@ services:
       # URL de l'API, ex: https://gesti-school-api.onrender.com/api/v1 (à saisir dans le dashboard)
       - key: VITE_API_BASE_URL
         sync: false
+    headers:
+      # En-têtes de sécurité : pas d'affichage dans un cadre (clickjacking), pas de script externe ou en ligne,
+      # connexions limitées à l'API Render (empêche l'envoi des données vers un autre site en cas de faille)
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: Strict-Transport-Security
+        value: max-age=31536000; includeSubDomains
+      - path: /*
+        name: Permissions-Policy
+        value: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+      - path: /*
+        name: Cross-Origin-Opener-Policy
+        value: same-origin-allow-popups
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https://*.onrender.com; frame-src 'self' blob:; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
     routes:
       # Application monopage : toutes les URLs (/eleves, /emploi-du-temps...) servent index.html
       - type: rewrite
@@ -90,6 +118,27 @@ services:
     buildCommand: echo "Site statique, aucune construction"
     staticPublishPath: .
     headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: Strict-Transport-Security
+        value: max-age=31536000; includeSubDomains
+      - path: /*
+        name: Permissions-Policy
+        value: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+      - path: /*
+        name: Cross-Origin-Opener-Policy
+        value: same-origin-allow-popups
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' https://*.onrender.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
       # Les images ne changent pas souvent : mises en cache une semaine par les navigateurs
       - path: /images/*
         name: Cache-Control

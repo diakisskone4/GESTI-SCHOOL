@@ -59,6 +59,7 @@ AUTH_USER_MODEL = "accounts.User"
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "apps.core.middleware.EntetesSecuriteMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",  # fichiers statiques en production
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -111,11 +112,16 @@ else:
             "ENGINE": "django.db.backends.postgresql",
             "NAME": config("DB_NAME", default="gesti_scolaire"),
             "USER": config("DB_USER", default="postgres"),
-            "PASSWORD": config("DB_PASSWORD", default="Diakis7261"),  # à mettre dans .env, jamais dans le code
+            "PASSWORD": config("DB_PASSWORD", default=""),  # dans backend/.env, jamais dans le code
             "HOST": config("DB_HOST", default="localhost"),
             "PORT": config("DB_PORT", default="5432"),
         }
     }
+
+# Authentification par e-mail avec blocage temporaire après trop d'échecs (apps/accounts/protection.py)
+AUTHENTICATION_BACKENDS = ["apps.accounts.protection.AuthentificationProtegee"]
+CONNEXION_ECHECS_MAX = config("CONNEXION_ECHECS_MAX", default=8, cast=int)
+CONNEXION_BLOCAGE_MINUTES = config("CONNEXION_BLOCAGE_MINUTES", default=15, cast=int)
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
@@ -147,14 +153,25 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 STORAGES = {
     "default": {
-        "BACKEND": "django.core.files.storage.FileSystemStorage",
+        # Adresses /media/ signées et temporaires (apps/core/media_securise.py)
+        "BACKEND": "apps.core.media_securise.StockageSigne",
     },
     "staticfiles": {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
 }
 
+# Durée de validité des liens vers les fichiers (/media/) renvoyés par l'API
+MEDIA_LIEN_DUREE_HEURES = config("MEDIA_LIEN_DUREE_HEURES", default=24, cast=int)
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Adresse de l'administration Django (ex. « gestion-7f3k/ ») : évite d'exposer la classique « admin/ »
+ADMIN_URL = config("ADMIN_URL", default="admin/").strip("/") + "/"
+
+# Requêtes : taille maximale hors fichiers (formulaires, JSON) et nombre de champs
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 5000
 
 # ---------------------------------------------------------------------------
 # Django REST Framework
@@ -184,10 +201,13 @@ REST_FRAMEWORK = {
         "contact": "10/hour",
     },
     "EXCEPTION_HANDLER": "apps.core.exceptions.exception_handler",
+    # Nombre de proxys devant l'API (Render : à confirmer) ; sans réglage, l'adresse IP utilisée par la
+    # limitation de débit peut être falsifiée par l'en-tête X-Forwarded-For.
+    "NUM_PROXIES": config("NUM_PROXIES", default=None, cast=lambda v: int(v) if v not in (None, "") else None),
 }
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=config("JWT_ACCESS_MIN", default=60, cast=int)),
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=config("JWT_ACCESS_MIN", default=30, cast=int)),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=config("JWT_REFRESH_DAYS", default=7, cast=int)),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
@@ -213,7 +233,22 @@ CSRF_TRUSTED_ORIGINS = config("CSRF_TRUSTED_ORIGINS", default="", cast=Csv())
 # Sécurité en production (actif quand DEBUG=False)
 # Render termine le HTTPS devant l'application et redirige déjà HTTP -> HTTPS.
 # ---------------------------------------------------------------------------
+SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
+SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
+X_FRAME_OPTIONS = "DENY"
+
 if not DEBUG:
+    # Clé secrète obligatoire : avec la clé par défaut, n'importe qui pourrait fabriquer des jetons
+    # de connexion ou des liens de fichiers valides.
+    if SECRET_KEY.startswith("django-insecure") or SECRET_KEY in ("change-me-in-production", "") or len(SECRET_KEY) < 32:
+        from django.core.exceptions import ImproperlyConfigured
+
+        raise ImproperlyConfigured("SECRET_KEY absente ou trop faible : définissez une clé longue et aléatoire.")
+    # Cache partagé entre les processus du serveur (blocages de connexion, limitation de débit)
+    CACHES = {"default": {"BACKEND": "django.core.cache.backends.db.DatabaseCache", "LOCATION": "gs_cache"}}
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
