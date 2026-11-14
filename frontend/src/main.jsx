@@ -2,6 +2,10 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
+import { demarrerTraduction } from './i18n/traduction'
+
+// Langue de l'interface (français, anglais ou arabe) : voir src/i18n/traduction.js
+demarrerTraduction()
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>

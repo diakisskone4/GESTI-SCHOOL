@@ -186,3 +186,28 @@
 @media (prefers-reduced-motion: reduce) {
   .page-enter, .sheet-backdrop, .sheet-panel { animation: none; }
 }
+
+/* ---------------------------------------------------------------------------
+   Arabe : lecture de droite à gauche (dir="rtl" posé par src/i18n/traduction.js).
+   Les mises en page en flex et en grille s'inversent d'elles-mêmes ; on corrige ici
+   les quelques classes « gauche / droite » écrites pour le sens de lecture français.
+   --------------------------------------------------------------------------- */
+[dir="rtl"] body {
+  font-family: "Segoe UI", Tahoma, "Noto Naskh Arabic", "Noto Sans Arabic", var(--font-sans);
+}
+[dir="rtl"] .ml-auto { margin-left: 0; margin-right: auto; }
+[dir="rtl"] .mr-auto { margin-right: 0; margin-left: auto; }
+[dir="rtl"] .ml-2 { margin-left: 0; margin-right: 0.5rem; }
+[dir="rtl"] .mr-1 { margin-right: 0; margin-left: 0.25rem; }
+[dir="rtl"] .text-left { text-align: right; }
+[dir="rtl"] .text-right { text-align: left; }
+[dir="rtl"] th, [dir="rtl"] td { text-align: start; }
+/* Champs à icône (recherche...) : l'icône et sa marge passent à droite */
+[dir="rtl"] .pl-9, [dir="rtl"] .pl-10 { padding-left: 0.75rem; }
+[dir="rtl"] .pl-9 { padding-right: 2.25rem; }
+[dir="rtl"] .pl-10 { padding-right: 2.5rem; }
+[dir="rtl"] .relative > .absolute.left-3 { left: auto; right: 0.75rem; }
+/* Flèches « suivant / précédent » et chevrons dans le bon sens */
+[dir="rtl"] .lucide-chevron-right, [dir="rtl"] .lucide-chevron-left,
+[dir="rtl"] .lucide-arrow-right, [dir="rtl"] .lucide-arrow-left { transform: scaleX(-1); }
+[dir="rtl"] .relative > .absolute.left-3\.5 { left: auto; right: 0.875rem; }

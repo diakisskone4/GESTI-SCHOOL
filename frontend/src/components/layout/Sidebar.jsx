@@ -2,6 +2,7 @@ import { NavLink } from "react-router-dom";
 import { GraduationCap, X } from "lucide-react";
 import { NAV_SECTIONS } from "./navConfig";
 import { useAuth } from "../../context/AuthContext";
+import SelecteurLangue from "../../i18n/SelecteurLangue";
 
 export default function Sidebar({ open, onClose }) {
   const { user } = useAuth();
@@ -65,6 +66,9 @@ export default function Sidebar({ open, onClose }) {
               </div>
             );
           })}
+
+          {/* Langue de l'application : Français, English, العربية */}
+          <SelecteurLangue sombre />
         </nav>
       </aside>
     </>

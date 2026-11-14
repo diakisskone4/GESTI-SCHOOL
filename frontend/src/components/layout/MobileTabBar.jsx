@@ -5,6 +5,7 @@ import { useAuth, ROLE_LABELS } from "../../context/AuthContext";
 import { messagesApi } from "../../api/endpoints";
 import { MOBILE_TABS, sectionsPourRole } from "./navConfig";
 import EtablissementSwitcher from "./EtablissementSwitcher";
+import SelecteurLangue from "../../i18n/SelecteurLangue";
 
 const POLL_MS = 60_000;
 
@@ -141,6 +142,8 @@ function MenuSheet({ open, onClose }) {
               </div>
             </div>
           ))}
+
+          <SelecteurLangue />
 
           <div className="space-y-2">
             <button onClick={() => navigate("/profil")} className="press flex w-full items-center gap-3 rounded-2xl bg-white px-4 py-3.5 text-sm font-medium text-slate-700 shadow-sm">
